@@ -1,0 +1,13 @@
+{
+  "cSpell.words": [
+    "conv",
+    "detuned",
+    "detunes",
+    "detuning",
+    "lerp",
+    "Milli",
+    "Millihertz",
+    "Wavetable"
+  ],
+  "rust-analyzer.check.allTargets": true
+}

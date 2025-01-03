@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Sandbox",
+      "cargo": {
+        "args": ["build", "--example", "sandbox"]
+      },
+      "args": []
+    }
+  ]
+}
