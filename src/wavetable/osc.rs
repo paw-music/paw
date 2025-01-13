@@ -1,4 +1,4 @@
-use super::Wavetable;
+use super::{Wavetable, WavetableRow};
 use crate::{
     osc::Osc,
     sample::Sample,
@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use fixed::traits::ToFixed;
-use num_traits::Float;
+use num_traits::{real::Real, Float};
 
 #[derive(Clone, Copy)]
 pub struct WavetableOsc<
@@ -19,12 +19,12 @@ pub struct WavetableOsc<
     const DEPTH: usize,
     const LENGTH: usize,
 > {
-    // TODO: Floating point depth?
+    // TODO: Floating point depth with interpolation?
     depth: usize,
     wavetable: &'a Wavetable<S, DEPTH, LENGTH>,
     start_phase: f32,
     phase: f32,
-    frequency: f32,
+    freq: f32,
 }
 
 impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: usize>
@@ -36,7 +36,7 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
             wavetable,
             start_phase: 0.0,
             phase: 0.0,
-            frequency: 0.0,
+            freq: 0.0,
             // start_phase: Phase::from_num(0.0),
             // phase: Phase::from_num(0.0),
             // sample_duration: SampleDuration::from_num(0.0),
@@ -69,13 +69,17 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
     pub fn wavetable(&self) -> &Wavetable<S, DEPTH, LENGTH> {
         self.wavetable
     }
+
+    pub fn current_row(&self) -> &WavetableRow<S, LENGTH> {
+        &self.wavetable.rows[self.depth]
+    }
 }
 
 impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: usize> Osc
     for WavetableOsc<'a, S, SAMPLE_RATE, DEPTH, LENGTH>
 {
     fn freq(&self) -> f32 {
-        self.frequency
+        self.freq
     }
 
     fn set_freq(&mut self, freq: f32) -> &mut Self {
@@ -88,7 +92,7 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
             "Malformed frequency {freq}"
         );
 
-        self.frequency = freq;
+        self.freq = freq;
 
         self
     }
@@ -107,7 +111,7 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
     fn next(&mut self) -> Option<Self::Item> {
         let sample = self.wavetable.at(self.depth, self.phase);
 
-        self.phase = (self.phase + self.frequency / SAMPLE_RATE as f32).fract();
+        self.phase = (self.phase + self.freq / SAMPLE_RATE as f32).fract();
 
         Some(sample)
     }

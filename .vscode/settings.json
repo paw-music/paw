@@ -1,12 +1,16 @@
 {
   "cSpell.words": [
+    "Adsr",
     "conv",
     "detuned",
     "detunes",
     "detuning",
+    "Egui",
     "lerp",
     "Milli",
     "Millihertz",
+    "nannou",
+    "nanos",
     "Wavetable"
   ],
   "rust-analyzer.check.allTargets": true

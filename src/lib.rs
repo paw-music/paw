@@ -3,10 +3,16 @@
 #[cfg(test)]
 extern crate std;
 
+#[macro_use]
+extern crate num_derive;
+
 pub mod ctx;
-pub mod sample;
-pub mod value;
-pub mod wavetable;
-pub mod voice;
-pub mod source;
+pub mod midi;
 pub mod osc;
+pub mod param;
+pub mod sample;
+pub mod source;
+pub mod value;
+pub mod voice;
+pub mod wavetable;
+pub mod adsr;

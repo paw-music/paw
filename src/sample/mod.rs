@@ -1,6 +1,8 @@
-use core::ops::{Add, Div, Sub};
+pub mod time;
 
-pub trait Sample: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> + Sized {
+use core::{iter::Sum, ops::{Add, Div, Sub}};
+
+pub trait Sample: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> + Sized + Sum {
     fn lerp(self, to: Self, num: u32, denom: u32) -> Self;
     fn saturating_add(self, other: Self) -> Self;
     fn to_f32(self) -> f32;
