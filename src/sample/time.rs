@@ -1,3 +1,4 @@
+use crate::param::ParamType;
 use core::{
     fmt::Display,
     ops::{Add, Mul},
@@ -5,20 +6,6 @@ use core::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SampleCount<const SAMPLE_RATE: u32>(u32);
-
-impl<const SAMPLE_RATE: u32> Display for SampleCount<SAMPLE_RATE> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.0 == 0 {
-            write!(f, "0")
-        } else if self.millis() == 0 {
-            write!(f, "{}t", self.inner())
-        } else if self < &Self::SECOND {
-            write!(f, "{}ms", self.millis())
-        } else {
-            write!(f, "{}s", self.seconds())
-        }
-    }
-}
 
 impl<const SAMPLE_RATE: u32> PartialOrd<u32> for SampleCount<SAMPLE_RATE> {
     fn partial_cmp(&self, other: &u32) -> Option<core::cmp::Ordering> {
@@ -43,8 +30,6 @@ impl<const SAMPLE_RATE: u32> SampleCount<SAMPLE_RATE> {
     pub const MAX: Self = Self::new(u32::MAX);
     pub const SECOND: Self = Self::new(SAMPLE_RATE);
     pub const MILLISECOND: Self = Self::new(SAMPLE_RATE / 1_000);
-    // pub const MICROSECOND: Self = Self::new(SAMPLE_RATE.div_ceil(1_000_000));
-    // pub const NANOSECOND: Self = Self::from_nanos(1);
 
     pub const fn new(count: u32) -> Self {
         Self(count)
@@ -53,15 +38,6 @@ impl<const SAMPLE_RATE: u32> SampleCount<SAMPLE_RATE> {
     pub const fn inner(self) -> u32 {
         self.0
     }
-
-    // pub const fn conv<const OTHER_SAMPLE_RATE: u32>(self) -> SampleCount<OTHER_SAMPLE_RATE> {
-    //     SampleCount::new(self.0 * SAMPLE_RATE / OTHER_SAMPLE_RATE)
-    // }
-
-    // /// Create SampleCount from floating point seconds value with precision of 1us. Maximum is 4294s
-    // pub const fn from_seconds_f32(seconds: f32) -> Self {
-    //     Self::from_micros((seconds * 1_000_000.0) as u32)
-    // }
 
     /// Create SampleCount from seconds
     pub const fn from_seconds(seconds: u32) -> Self {
@@ -74,21 +50,9 @@ impl<const SAMPLE_RATE: u32> SampleCount<SAMPLE_RATE> {
         // Self::new((SAMPLE_RATE * millis).div_ceil(1_000))
     }
 
-    // /// Create SampleCount from microseconds rounding to ceiling
-    // pub const fn from_micros(micros: u32) -> Self {
-    //     Self::new(Self::MICROSECOND.inner() * micros)
-    //     // Self::new((SAMPLE_RATE * micros).div_ceil(1_000_000))
-    // }
-
-    // /// Create SampleCount from nanoseconds rounding to ceiling
-    // pub const fn from_nanos(nanos: u32) -> Self {
-    //     Self::new(Self::NANOSECOND)
-    // }
-
-    // /// Get floating point seconds from sample count with precision of 1us
-    // pub const fn seconds_f32(self) -> f32 {
-    //     self.micros() as f32 / 1_000_000.0
-    // }
+    pub const fn from_millis_f32(millis: f32) -> Self {
+        Self::new((SAMPLE_RATE as f32 / 1_000.0 * millis) as u32)
+    }
 
     /// Get milliseconds from sample count rounding to ceiling
     pub const fn seconds(self) -> u32 {
@@ -102,15 +66,9 @@ impl<const SAMPLE_RATE: u32> SampleCount<SAMPLE_RATE> {
         self.0 * 1_000 / SAMPLE_RATE
     }
 
-    // /// Get microseconds from sample count rounding to ceiling
-    // pub const fn micros(self) -> u32 {
-    //     (self.0 * 1_000_000).div_ceil(SAMPLE_RATE)
-    // }
-
-    // /// Get nanoseconds from sample count rounding to ceiling
-    // pub const fn nanos(self) -> u32 {
-    //     (self.0 as u64 * 1_000_000_000).div_ceil(SAMPLE_RATE as u64) as u32
-    // }
+    pub const fn millis_f32(self) -> f32 {
+        self.0 as f32 * 1_000.0 / SAMPLE_RATE as f32
+    }
 }
 
 impl<const SAMPLE_RATE: u32> Add for SampleCount<SAMPLE_RATE> {
@@ -126,6 +84,26 @@ impl<const SAMPLE_RATE: u32> Mul<u32> for SampleCount<SAMPLE_RATE> {
 
     fn mul(self, rhs: u32) -> Self::Output {
         Self::new(self.inner() * rhs)
+    }
+}
+
+impl<const SAMPLE_RATE: u32> ParamType for SampleCount<SAMPLE_RATE> {
+    /*
+    Self::new(
+        (self.0 as i64 + offset as i64).clamp(Self::ZERO.0 as i64, Self::MAX.0 as i64) as u32,
+    )
+     */
+
+    fn as_value(&self) -> crate::param::ParamValue {
+        crate::param::ParamValue::U32 { value: self.0 }
+    }
+
+    fn set_value(&mut self, value: crate::param::ParamValue) {
+        self.0 = value.as_u32_range();
+    }
+
+    fn format(&self) -> crate::param::ParamFormat {
+        crate::param::ParamFormat::TimeInSamples(SAMPLE_RATE)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    adsr::{Adsr, AdsrParams},
+    components::adsr::{Adsr, AdsrParams},
     midi::note::Note,
     osc::Osc,
     sample::Sample,

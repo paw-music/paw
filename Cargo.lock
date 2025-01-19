@@ -2258,6 +2258,7 @@ dependencies = [
  "num-derive 0.4.2",
  "num-traits",
  "rodio",
+ "static_assertions",
 ]
 
 [[package]]
