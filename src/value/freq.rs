@@ -71,20 +71,8 @@
 //     }
 // }
 
-use crate::param::ParamType;
-
-pub type Millihertz = fixed::types::U24F8;
+pub type Millihertz = fixed::types::U20F12;
 
 /// For frequency millihertz are used as 32-bit unsigned fixed point number with 8 bit fractional part, so it is 256 point fractional part and >16.7MHz for integer part which is enough for audio. I chose to use fractional hertz type so this frequency type is general for everything, of course we don't need to produce such low-frequency audio data, it is inaudible, but we need these low frequencies in LFOs.
 /// The smallest frequency after zero is 0.0039Hz (once every 256s or 4 minutes)
 pub type Freq = Millihertz;
-
-impl ParamType for Freq {
-    fn as_value(&self) -> crate::param::ParamValue {
-        crate::param::ParamValue::Freq(*self)
-    }
-
-    fn set_value(&mut self, value: crate::param::ParamValue) {
-        *self = value.as_freq();
-    }
-}

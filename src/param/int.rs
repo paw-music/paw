@@ -1,4 +1,3 @@
-use super::ParamType;
 use num::Integer;
 
 // #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -19,22 +18,3 @@ use num::Integer;
 //         let value = (self.0 as i32).saturating_add(offset * )
 //     }
 // }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct U8Range(u8);
-
-impl ParamType for U8Range {
-    fn as_value(&self) -> super::ParamValue {
-        super::ParamValue::U8 { value: self.0 }
-    }
-
-    fn set_value(&mut self, value: super::ParamValue) {
-        self.0 = value.as_u8_range();
-    }
-}
-
-impl U8Range {
-    pub fn new(value: u8) -> Self {
-        Self(value)
-    }
-}

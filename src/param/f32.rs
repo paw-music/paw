@@ -1,5 +1,4 @@
-use super::{ParamType, ParamValue};
-use core::ops::RangeInclusive;
+use core::ops::{Add, Mul, RangeInclusive, Sub};
 
 // TODO: Generalize?
 //  -- No, remove at all. ParamType should not denote ranges. It is the role of Param. Yes?
@@ -7,42 +6,78 @@ use core::ops::RangeInclusive;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UnitInterval(f32);
 
+// impl Add<f32> for UnitInterval {
+//     type Output = f32;
+
+//     fn add(self, rhs: f32) -> Self::Output {
+//         self.0 + rhs
+//     }
+// }
+
+// impl Add<UnitInterval> for f32 {
+//     type Output = UnitInterval;
+
+//     fn add(self, rhs: UnitInterval) -> Self::Output {
+//         UnitInterval::new(self + rhs.0)
+//     }
+// }
+
+// impl Sub<f32> for UnitInterval {
+//     type Output = Self;
+
+//     fn sub(self, rhs: f32) -> Self::Output {
+//         Self::new(self.0 - rhs)
+//     }
+// }
+
+// impl Sub<UnitInterval> for f32 {
+//     type Output = UnitInterval;
+
+//     fn sub(self, rhs: UnitInterval) -> Self::Output {
+//         UnitInterval::new(self - rhs.0)
+//     }
+// }
+
+// impl Mul<f32> for UnitInterval {
+//     type Output = Self;
+
+//     fn mul(self, rhs: f32) -> Self::Output {
+//         Self::new(self.0 * rhs)
+//     }
+// }
+
+// impl Mul<UnitInterval> for f32 {
+//     type Output = UnitInterval;
+
+//     fn mul(self, rhs: UnitInterval) -> Self::Output {
+//         UnitInterval::new(self * rhs.0)
+//     }
+// }
+
 impl UnitInterval {
     pub const RANGE: RangeInclusive<f32> = 0.0..=1.0;
+    pub const ZERO: Self = Self(0.0);
+    pub const MAX: Self = Self(1.0);
 
     pub fn new(value: f32) -> Self {
         Self(value.clamp(*Self::RANGE.start(), *Self::RANGE.end()))
     }
 
-    pub fn range(clamp: Option<(ParamValue, ParamValue)>) -> RangeInclusive<f32> {
-        clamp
-            .map(|clamp| clamp.0.as_unit_interval()..=clamp.1.as_unit_interval())
-            .unwrap_or(Self::RANGE)
-    }
-
-    // Only for egui
-    pub fn range_f64(clamp: Option<(ParamValue, ParamValue)>) -> RangeInclusive<f64> {
-        clamp
-            .map(|clamp| clamp.0.as_unit_interval() as f64..=clamp.1.as_unit_interval() as f64)
-            .unwrap_or(*Self::RANGE.start() as f64..=*Self::RANGE.end() as f64)
-    }
-
+    #[inline]
     pub fn inner(&self) -> f32 {
         self.0
     }
 }
 
-impl ParamType for UnitInterval {
-    fn as_value(&self) -> super::ParamValue {
-        super::ParamValue::UnitInterval { value: self.0 }
+impl PartialOrd<f32> for UnitInterval {
+    fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
+        self.0.partial_cmp(other)
     }
+}
 
-    fn set_value(&mut self, value: super::ParamValue) {
-        self.0 = value.as_unit_interval();
-    }
-
-    fn format(&self) -> super::ParamFormat {
-        super::ParamFormat::UnitInterval
+impl PartialEq<f32> for UnitInterval {
+    fn eq(&self, other: &f32) -> bool {
+        self.0 == *other
     }
 }
 
@@ -51,79 +86,27 @@ pub struct HalfUnitInterval(f32);
 
 impl HalfUnitInterval {
     pub const RANGE: RangeInclusive<f32> = 0.0..=0.5;
+    pub const ZERO: Self = Self(0.0);
+    pub const MAX: Self = Self(0.5);
 
     pub fn new(value: f32) -> Self {
         Self(value.clamp(*Self::RANGE.start(), *Self::RANGE.end()))
     }
 
-    pub fn range(clamp: Option<(ParamValue, ParamValue)>) -> RangeInclusive<f32> {
-        clamp
-            .map(|clamp| clamp.0.as_half_unit_interval()..=clamp.1.as_half_unit_interval())
-            .unwrap_or(Self::RANGE)
-    }
-
-    pub fn range_f64(clamp: Option<(ParamValue, ParamValue)>) -> RangeInclusive<f64> {
-        clamp
-            .map(|clamp| {
-                clamp.0.as_half_unit_interval() as f64..=clamp.1.as_half_unit_interval() as f64
-            })
-            .unwrap_or(*Self::RANGE.start() as f64..=*Self::RANGE.end() as f64)
-    }
-
+    #[inline]
     pub fn inner(&self) -> f32 {
         self.0
     }
 }
 
-impl ParamType for HalfUnitInterval {
-    fn as_value(&self) -> super::ParamValue {
-        super::ParamValue::HalfUnitInterval { value: self.0 }
-    }
-
-    fn set_value(&mut self, value: super::ParamValue) {
-        self.0 = value.as_half_unit_interval();
+impl PartialOrd<f32> for HalfUnitInterval {
+    fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
+        self.0.partial_cmp(other)
     }
 }
 
-// impl<const STEP_DENOM: usize> UnitInterval<STEP_DENOM> {
-//     pub const STEP: f32 = 1.0 / STEP_DENOM as f32;
-
-//     fn new(value: f32) -> Self {
-//         Self(value.clamp(Self::MIN.0, Self::MAX.0))
-//     }
-// }
-
-// impl<const STEP_DENOM: usize> ParamType for UnitInterval<STEP_DENOM> {
-//     const MIN: Self = Self(0.0);
-//     const MAX: Self = Self(1.0);
-
-//     fn offset(&self, offset: i32) -> Self {
-//         let value = self.0 + offset as f32 * Self::STEP;
-//         Self::new(value)
-//     }
-// }
-
-// // TODO
-// // pub struct HalfUnitInterval(f32);
-
-// #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-// pub struct SignedUnitInterval<const STEP_DENOM: usize>(f32);
-
-// impl<const STEP_DENOM: usize> SignedUnitInterval<STEP_DENOM> {
-//     pub const STEP: f32 = 1.0 / STEP_DENOM as f32;
-
-//     fn new(value: f32) -> Self {
-//         Self(value.clamp(Self::MIN.0, Self::MAX.0))
-//     }
-// }
-
-// impl<const STEP_DENOM: usize> ParamType for SignedUnitInterval<STEP_DENOM> {
-//     const MIN: Self = Self(-1.0);
-
-//     const MAX: Self = Self(1.0);
-
-//     fn offset(&self, offset: i32) -> Self {
-//         let value = self.0 + offset as f32 * Self::STEP;
-//         Self::new(value)
-//     }
-// }
+impl PartialEq<f32> for HalfUnitInterval {
+    fn eq(&self, other: &f32) -> bool {
+        self.0 == *other
+    }
+}

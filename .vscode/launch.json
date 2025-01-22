@@ -5,7 +5,7 @@
       "request": "launch",
       "name": "Sandbox",
       "cargo": {
-        "args": ["build", "--example", "sandbox"]
+        "args": ["build", "--example", "sandbox", "--features", "egui"]
       },
       "args": []
     }

@@ -24,7 +24,7 @@ pub struct WavetableOsc<
     wavetable: &'a Wavetable<S, DEPTH, LENGTH>,
     start_phase: f32,
     phase: f32,
-    freq: f32,
+    freq: Freq,
 }
 
 impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: usize>
@@ -36,7 +36,7 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
             wavetable,
             start_phase: 0.0,
             phase: 0.0,
-            freq: 0.0,
+            freq: Freq::ZERO,
             // start_phase: Phase::from_num(0.0),
             // phase: Phase::from_num(0.0),
             // sample_duration: SampleDuration::from_num(0.0),
@@ -78,19 +78,16 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
 impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: usize> Osc
     for WavetableOsc<'a, S, SAMPLE_RATE, DEPTH, LENGTH>
 {
-    fn freq(&self) -> f32 {
+    fn freq(&self) -> Freq {
         self.freq
     }
 
-    fn set_freq(&mut self, freq: f32) -> &mut Self {
+    fn set_freq(&mut self, freq: Freq) -> &mut Self {
         // self.sample_duration = (LENGTH.to_fixed::<SampleDuration>()
         //     * freq.to_fixed::<SampleDuration>())
         //     / SAMPLE_RATE.to_fixed::<SampleDuration>();
 
-        debug_assert!(
-            freq.is_finite() && freq >= 0.0,
-            "Malformed frequency {freq}"
-        );
+        debug_assert!(freq >= 0.0, "Malformed frequency {freq}");
 
         self.freq = freq;
 
@@ -111,7 +108,7 @@ impl<'a, S: Sample, const SAMPLE_RATE: u32, const DEPTH: usize, const LENGTH: us
     fn next(&mut self) -> Option<Self::Item> {
         let sample = self.wavetable.at(self.depth, self.phase);
 
-        self.phase = (self.phase + self.freq / SAMPLE_RATE as f32).fract();
+        self.phase = (self.phase + self.freq.to_num::<f32>() / SAMPLE_RATE as f32).fract();
 
         Some(sample)
     }

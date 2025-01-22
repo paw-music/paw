@@ -1,4 +1,3 @@
-use crate::param::ParamType;
 use core::{
     fmt::Display,
     ops::{Add, Mul},
@@ -84,26 +83,6 @@ impl<const SAMPLE_RATE: u32> Mul<u32> for SampleCount<SAMPLE_RATE> {
 
     fn mul(self, rhs: u32) -> Self::Output {
         Self::new(self.inner() * rhs)
-    }
-}
-
-impl<const SAMPLE_RATE: u32> ParamType for SampleCount<SAMPLE_RATE> {
-    /*
-    Self::new(
-        (self.0 as i64 + offset as i64).clamp(Self::ZERO.0 as i64, Self::MAX.0 as i64) as u32,
-    )
-     */
-
-    fn as_value(&self) -> crate::param::ParamValue {
-        crate::param::ParamValue::U32 { value: self.0 }
-    }
-
-    fn set_value(&mut self, value: crate::param::ParamValue) {
-        self.0 = value.as_u32_range();
-    }
-
-    fn format(&self) -> crate::param::ParamFormat {
-        crate::param::ParamFormat::TimeInSamples(SAMPLE_RATE)
     }
 }
 

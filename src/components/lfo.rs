@@ -1,9 +1,12 @@
-use crate::{param::Param, value::freq::Freq};
+use crate::{
+    param::{f32::UnitInterval, ui::UiComponent},
+    value::freq::Freq,
+};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub enum LfoWaveform {
     /// Pulse waveform with specific pulse width
-    Pulse(u32),
+    Pulse(UnitInterval),
     #[default]
     Sine,
     Triangle,
@@ -27,16 +30,36 @@ pub struct Lfo<const SAMPLE_RATE: u32> {
     waveform: LfoWaveform,
 }
 
+impl<const SAMPLE_RATE: u32> UiComponent for Lfo<SAMPLE_RATE> {
+    fn ui(&mut self, ui: &mut impl crate::param::ui::ParamUi) {
+        ui.freq(
+            "Frequency",
+            &mut self.freq,
+            Some((Freq::from_num(0.01), Freq::from_num(100.0))),
+        );
+        ui.select(
+            "Waveform",
+            &mut self.waveform,
+            &[
+                ("Pulse", LfoWaveform::Pulse(UnitInterval::new(0.0))),
+                ("Sine", LfoWaveform::Sine),
+                ("Triangle", LfoWaveform::Triangle),
+                ("Saw", LfoWaveform::Saw),
+                ("Reverse saw", LfoWaveform::ReverseSaw),
+            ],
+        );
+
+        if let LfoWaveform::Pulse(pulse_width) = &mut self.waveform {
+            ui.unit_interval("Pulse width", pulse_width);
+        }
+    }
+}
+
 impl<const SAMPLE_RATE: u32> Lfo<SAMPLE_RATE> {
     pub fn new() -> Self {
         Self {
             freq: Freq::ZERO,
             waveform: LfoWaveform::default(),
         }
-    }
-
-    pub fn with_params(&mut self, mut f: impl FnMut(Param)) {
-        // TODO: Rate
-        f(Param::new("Frequency", &mut self.freq));
     }
 }

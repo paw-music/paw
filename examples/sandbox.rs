@@ -11,8 +11,7 @@ use paw::{
     osc::Osc as _,
     param::{
         f32::{HalfUnitInterval, UnitInterval},
-        int::U8Range,
-        Param, ParamValue,
+        ui::UiComponent,
     },
     sample::time::SampleCount,
     value::freq::Freq,
@@ -232,103 +231,6 @@ fn event(_app: &App, model: &mut Model, event: WindowEvent) {
     }
 }
 
-fn slider_from_param<'a>(mut param: Param<'a>) -> Slider<'a> {
-    let logarithmic = param.is_logarithmic();
-    let name = param.name();
-    let format = param.format();
-
-    let slider = match param.value() {
-        paw::param::ParamValue::UnitInterval { .. } => {
-            Slider::from_get_set(UnitInterval::range_f64(param.clamp()), move |new_value| {
-                if let Some(new_value) = new_value {
-                    param.set(UnitInterval::new(new_value as f32));
-                }
-
-                param.value().as_unit_interval() as f64
-            })
-        }
-        paw::param::ParamValue::HalfUnitInterval { .. } => Slider::from_get_set(
-            HalfUnitInterval::range_f64(param.clamp()),
-            move |new_value| {
-                if let Some(new_value) = new_value {
-                    param.set(UnitInterval::new(new_value as f32));
-                }
-
-                param.value().as_half_unit_interval() as f64
-            },
-        ),
-        paw::param::ParamValue::U8 { .. } => {
-            const DEFAULT_RANGE: RangeInclusive<f64> = 0.0..=u8::MAX as f64;
-
-            let range = param
-                .clamp()
-                .map(|clamp| (clamp.0.as_u8_range() as f64..=clamp.1.as_u8_range() as f64))
-                .unwrap_or(DEFAULT_RANGE);
-            Slider::from_get_set(range, move |new_value| {
-                if let Some(new_value) = new_value {
-                    param.set(U8Range::new(new_value as u8));
-                }
-
-                param.value().as_u8_range() as f64
-            })
-        }
-        paw::param::ParamValue::U32 { .. } => {
-            const DEFAULT_RANGE: RangeInclusive<f64> = 0.0..=u32::MAX as f64;
-
-            let range = param
-                .clamp()
-                .map(|clamp| (clamp.0.as_u32_range() as f64..=clamp.1.as_u32_range() as f64))
-                .unwrap_or(DEFAULT_RANGE);
-
-            Slider::from_get_set(range, move |new_value| {
-                if let Some(new_value) = new_value {
-                    param.set(SampleCount::<SAMPLE_RATE>::new(new_value as u32));
-                }
-
-                param.value().as_u32_range() as f64
-            })
-        }
-        ParamValue::Freq(_) => {
-            const DEFAULT_RANGE: RangeInclusive<f64> = 0.01..=20_000.0;
-
-            let range = param
-                .clamp()
-                .map(|clamp| (clamp.0.as_freq().to_num()..=clamp.1.as_freq().to_num()))
-                .unwrap_or(DEFAULT_RANGE);
-
-            Slider::from_get_set(range, move |new_value| {
-                if let Some(new_value) = new_value {
-                    param.set(ParamValue::Freq(Freq::from_num(new_value)));
-                }
-
-                param.value().as_freq().to_num()
-            })
-        }
-    }
-    .logarithmic(logarithmic)
-    .text(name)
-    .custom_formatter(move |value, _| match format {
-        paw::param::ParamFormat::Auto => format!("{value:.2}"),
-        paw::param::ParamFormat::UnitInterval => format!("{value:.2}"),
-        paw::param::ParamFormat::TimeInSamples(sample_rate) => {
-            let value = value as u32;
-            let millis = value * 1_000 / sample_rate;
-
-            if value == 0 {
-                format!("0")
-            } else if millis == 0 {
-                format!("{}t", value)
-            } else if value < sample_rate {
-                format!("{}ms", millis)
-            } else {
-                format!("{}s", value / sample_rate)
-            }
-        }
-    });
-
-    slider
-}
-
 fn raw_window_event(_app: &App, model: &mut Model, event: &nannou::winit::event::WindowEvent) {
     // Let egui handle things like keyboard and mouse input.
     model.egui.handle_raw_event(event);
@@ -345,130 +247,21 @@ fn update(_app: &App, model: &mut Model, update: Update) {
     nannou_egui::egui::Window::new("Synth")
         .fixed_size((250.0, 500.0))
         .show(&ctx, |ui| {
-            ui.heading("ADSR");
-            let adsr = synth.voices.adsr_mut();
+            synth.voices.ui(ui);
 
-            adsr.with_params(|param| {
-                ui.add(slider_from_param(param));
-            });
+            ui.add(
+                Slider::from_get_set(0.0..=(WAVETABLE_DEPTH - 1) as f64, |new_value| {
+                    if let Some(new_value) = new_value {
+                        synth.voices.iter_voices_mut().for_each(|voice| {
+                            voice.osc_mut().set_depth(new_value as usize);
+                        });
+                    }
 
-            // ui.add(
-            //     Slider::from_get_set(0.0..=10_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_delay(SampleCount::from_millis(new_value as u32));
-            //         }
-
-            //         adsr.delay().millis_f32() as f64
-            //     })
-            //     .text("Delay")
-            //     .custom_formatter(|delay, _| {
-            //         SampleCount::<SAMPLE_RATE>::from_millis_f32(delay as f32).to_string()
-            //     })
-            //     .logarithmic(true)
-            //     .integer(),
-            // );
-            // ui.add(
-            //     Slider::from_get_set(0.0..=10_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_attack(SampleCount::from_millis(new_value as u32));
-            //         }
-
-            //         adsr.attack().millis_f32() as f64
-            //     })
-            //     .text("Attack")
-            //     .custom_formatter(|attack, _| {
-            //         SampleCount::<SAMPLE_RATE>::from_millis_f32(attack as f32).to_string()
-            //     })
-            //     .logarithmic(true)
-            //     .integer(),
-            // );
-            // ui.add(
-            //     Slider::from_get_set(0.0..=10_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_hold(SampleCount::from_millis(new_value as u32));
-            //         }
-
-            //         adsr.hold().millis_f32() as f64
-            //     })
-            //     .text("Hold")
-            //     .custom_formatter(|hold, _| {
-            //         SampleCount::<SAMPLE_RATE>::from_millis_f32(hold as f32).to_string()
-            //     })
-            //     .logarithmic(true)
-            //     .integer(),
-            // );
-            // ui.add(
-            //     Slider::from_get_set(0.0..=10_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_decay(SampleCount::from_millis(new_value as u32));
-            //         }
-
-            //         adsr.decay().millis_f32() as f64
-            //     })
-            //     .text("Decay")
-            //     .custom_formatter(|decay, _| {
-            //         SampleCount::<SAMPLE_RATE>::from_millis_f32(decay as f32).to_string()
-            //     })
-            //     .logarithmic(true)
-            //     .integer(),
-            // );
-            // ui.add(
-            //     Slider::from_get_set(0.0..=1.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_sustain(new_value as f32);
-            //         }
-
-            //         adsr.sustain() as f64
-            //     })
-            //     .text("Sustain"),
-            // );
-            // ui.add(
-            //     Slider::from_get_set(0.0..=10_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             adsr.set_release(SampleCount::from_millis(new_value as u32));
-            //         }
-
-            //         adsr.release().millis_f32() as f64
-            //     })
-            //     .text("Release")
-            //     .custom_formatter(|release, _| {
-            //         SampleCount::<SAMPLE_RATE>::from_millis_f32(release as f32).to_string()
-            //     })
-            //     .logarithmic(true)
-            //     .integer(),
-            // );
-
-            // ui.add(
-            //     Slider::from_get_set(20.0..=20_000.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             synth.voices.set_freq(new_value as f32);
-            //         }
-            //         synth.voices.freq() as f64
-            //     })
-            //     .text("Frequency")
-            //     .drag_value_speed(0.5)
-            //     .trailing_fill(true)
-            //     .logarithmic(true),
-            // );
-
-            // ui.add(
-            //     Slider::from_get_set(0.0..=(WAVETABLE_DEPTH - 1) as f64, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             synth.voices.iter_all_voices_mut().for_each(|voice| {
-            //                 voice.osc_mut().set_depth(new_value as usize);
-            //             });
-            //         }
-
-            //         synth
-            //             .voices
-            //             .iter_active_voices()
-            //             .next()
-            //             .map(|voice| voice.osc().depth())
-            //             .unwrap() as f64
-            //     })
-            //     .integer()
-            //     .text("Table depth"),
-            // );
+                    synth.voices.voice_n(0).osc().depth() as f64
+                })
+                .integer()
+                .text("Table depth"),
+            );
 
             // ui.add(
             //     Slider::from_get_set(0.0..=1.0, |new_value| {
@@ -487,50 +280,6 @@ fn update(_app: &App, model: &mut Model, update: Update) {
             //     })
             //     .text("Phase"),
             // );
-
-            // let active_voices_res = ui.add(
-            //     Slider::from_get_set(1.0..=(MAX_VOICES as f64), |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             synth.voices.set_unison(new_value as usize);
-            //         }
-
-            //         synth.voices.unison() as f64
-            //     })
-            //     .text("Voices count")
-            //     .integer(),
-            // );
-
-            // let detune_res = ui.add(
-            //     Slider::from_get_set(0.0..=0.5, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             synth.voices.set_detune(new_value as f32);
-            //         }
-
-            //         synth.voices.detune() as f64
-            //     })
-            //     .text("Detune"),
-            // );
-
-            // let blend_res = ui.add(
-            //     Slider::from_get_set(0.0..=1.0, |new_value| {
-            //         if let Some(new_value) = new_value {
-            //             synth.voices.set_blend(new_value as f32);
-            //         }
-
-            //         synth.voices.blend() as f64
-            //     })
-            //     .text("Blend"),
-            // );
-
-            // model.draw_voices = active_voices_res.changed()
-            //     || active_voices_res.dragged()
-            //     || detune_res.hovered()
-            //     || detune_res.dragged()
-            //     || blend_res.dragged()
-            //     || blend_res.hovered();
-
-            // ui.label(format!("{} active voices", synth.voices.unison()));
-            // ui.label(format!("{}Hz", synth.voices.freq()));
         });
 }
 
@@ -636,8 +385,6 @@ fn view(app: &App, model: &Model, frame: Frame) {
             )
         }));
 
-    let blend_height = 100.0;
-
     // if model.draw_voices {
     //     synth
     //         .voices
@@ -653,6 +400,25 @@ fn view(app: &App, model: &Model, frame: Frame) {
     //                 .weight(if is_center { 2.0 } else { 1.0 });
     //         });
     // }
+
+    let unison_pos = pt2(200.0, -250.0);
+    let unison_width = 250.0;
+    let blend_height = 100.0;
+
+    if let Some(voices_detune) = synth.voices.voices_detune() {
+        voices_detune.for_each(|(detune, blend)| {
+            let x = (1.0 - detune) * unison_width;
+            let is_center = detune == 1.0;
+
+            draw.line()
+                .start(pt2(x, 0.0) + unison_pos)
+                .end(pt2(x, -blend_height * blend) + unison_pos)
+                .color(if is_center { LIGHTPINK } else { PURPLE })
+                .weight(if is_center { 2.0 } else { 1.0 });
+        });
+
+        draw.ellipse().radius(5.0).color(LIGHTCORAL).xy(unison_pos);
+    }
 
     draw.to_frame(app, &frame).unwrap();
 

@@ -1,8 +1,7 @@
 use crate::{
-    param::{f32::UnitInterval, Param, ParamType},
+    param::{f32::UnitInterval, ui::UiComponent},
     sample::time::SampleCount,
 };
-use num::clamp;
 
 // const BASE_SAMPLE_RATE: u32 = 48_000;
 
@@ -21,35 +20,43 @@ pub struct AdsrParams<const SAMPLE_RATE: u32> {
     pub release: SampleCount<SAMPLE_RATE>,
 }
 
-impl<const SAMPLE_RATE: u32> AdsrParams<SAMPLE_RATE> {
-    // Note: Useless, as sustain is infinite
-    // pub fn length(&self) -> SampleCount<SAMPLE_RATE> {
-    //     self.attack + self.decay + self.release
-    // }
+impl<const SAMPLE_RATE: u32> UiComponent for AdsrParams<SAMPLE_RATE> {
+    fn ui(&mut self, ui: &mut impl crate::param::ui::ParamUi) {
+        let time_clamp = (SampleCount::from_millis(1), SampleCount::from_seconds(10));
 
-    pub fn with_params(&mut self, mut f: impl FnMut(Param)) {
-        f(Param::new("Delay", &mut self.delay).clamped(
-            SampleCount::<SAMPLE_RATE>::ZERO,
-            SampleCount::<SAMPLE_RATE>::from_millis(10_000),
-        ));
-        f(Param::new("Attack", &mut self.attack).clamped(
-            SampleCount::<SAMPLE_RATE>::ZERO,
-            SampleCount::<SAMPLE_RATE>::from_millis(10_000),
-        ));
-        f(Param::new("Hold", &mut self.hold).clamped(
-            SampleCount::<SAMPLE_RATE>::ZERO,
-            SampleCount::<SAMPLE_RATE>::from_millis(10_000),
-        ));
-        f(Param::new("Decay", &mut self.decay).clamped(
-            SampleCount::<SAMPLE_RATE>::ZERO,
-            SampleCount::<SAMPLE_RATE>::from_millis(10_000),
-        ));
-        f(Param::new("Sustain", &mut self.sustain));
-        f(Param::new("Release", &mut self.release).clamped(
-            SampleCount::<SAMPLE_RATE>::ZERO,
-            SampleCount::<SAMPLE_RATE>::from_millis(10_000),
-        ));
+        ui.sample_count("Delay", &mut self.delay, Some(time_clamp));
+        ui.sample_count("Attack", &mut self.attack, Some(time_clamp));
+        ui.sample_count("Hold", &mut self.hold, Some(time_clamp));
+        ui.sample_count("Decay", &mut self.decay, Some(time_clamp));
+        ui.unit_interval("Sustain", &mut self.sustain);
+        ui.sample_count("Release", &mut self.release, Some(time_clamp));
     }
+}
+
+impl<const SAMPLE_RATE: u32> AdsrParams<SAMPLE_RATE> {
+    // pub fn with_params(&mut self, mut f: impl FnMut(Param)) {
+    //     f(Param::new("Delay", &mut self.delay).clamped(
+    //         SampleCount::<SAMPLE_RATE>::ZERO,
+    //         SampleCount::<SAMPLE_RATE>::from_millis(10_000),
+    //     ));
+    //     f(Param::new("Attack", &mut self.attack).clamped(
+    //         SampleCount::<SAMPLE_RATE>::ZERO,
+    //         SampleCount::<SAMPLE_RATE>::from_millis(10_000),
+    //     ));
+    //     f(Param::new("Hold", &mut self.hold).clamped(
+    //         SampleCount::<SAMPLE_RATE>::ZERO,
+    //         SampleCount::<SAMPLE_RATE>::from_millis(10_000),
+    //     ));
+    //     f(Param::new("Decay", &mut self.decay).clamped(
+    //         SampleCount::<SAMPLE_RATE>::ZERO,
+    //         SampleCount::<SAMPLE_RATE>::from_millis(10_000),
+    //     ));
+    //     f(Param::new("Sustain", &mut self.sustain));
+    //     f(Param::new("Release", &mut self.release).clamped(
+    //         SampleCount::<SAMPLE_RATE>::ZERO,
+    //         SampleCount::<SAMPLE_RATE>::from_millis(10_000),
+    //     ));
+    // }
 
     pub fn before_sustain(&self) -> SampleCount<SAMPLE_RATE> {
         self.delay + self.attack + self.hold + self.decay

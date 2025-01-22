@@ -1,9 +1,16 @@
+use fixed::traits::ToFixed;
+
 use crate::{
     components::adsr::{Adsr, AdsrParams},
     midi::note::Note,
     osc::Osc,
+    param::{
+        f32::{HalfUnitInterval, UnitInterval},
+        ui::UiComponent,
+    },
     sample::Sample,
     source::Source,
+    value::freq::Freq,
 };
 
 pub struct Voice<O: Osc, const SAMPLE_RATE: u32>
@@ -58,27 +65,24 @@ where
 // TODO: Blend mode. Like Center vs Detuned, Linear (more detuned voices blend less)
 // TODO: Maybe for even number of voices there should be no center voices at all and all voices will be detuned? - Yes, fix this
 /// Distribute detune by voices, returns iterator of (detune factor, voice amp determined by blend)
-pub fn voices_detune(count: usize, detune: f32, blend: f32) -> impl Iterator<Item = (f32, f32)> {
-    // Note: Detune is allowed to be zero, it is checked below and treated as "no detune"
-    debug_assert!(detune >= 0.0 && detune <= 0.5, "Malformed detune {detune}");
-    debug_assert!(blend >= 0.0 && blend <= 1.0, "Malformed blend {blend}");
-
-    let half_detuned_voices = (count as f32 - 1.0) / 2.0;
-    let center_voices = 2.0 - count as f32 % 1.0;
-    // let attenuation = 1.0 / (count as f32).sqrt();
-    // Center blend
-    // let blend = blend - 0.5;
+/// This is a distinct function to be used both for synthesizer and UI to draw unison parameters
+pub fn voices_detune(
+    count: usize,
+    detune: UnitInterval,
+    blend: HalfUnitInterval,
+) -> impl Iterator<Item = (f32, f32)> {
+    let half_detuned_voices = count as f32 / 2.0;
 
     (0..count).map(move |index| {
         if detune > 0.0 && half_detuned_voices > 0.0 {
-            let center_offset = (index as f32 - half_detuned_voices).trunc() / half_detuned_voices;
+            let center_offset = (index as f32 + 0.5) / half_detuned_voices - 1.0;
 
             (
-                1.0 + center_offset * detune,
+                1.0 + center_offset * detune.inner(),
                 if center_offset == 0.0 {
-                    1.0 - blend
+                    1.0 - blend.inner()
                 } else {
-                    blend
+                    blend.inner()
                 }
                 .sqrt(),
             )
@@ -96,11 +100,12 @@ struct VoiceGroup<const MAX_UNISON: usize> {
     voices_indices: [Option<usize>; MAX_UNISON],
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct MonoVoice {
     note: Option<Note>,
 }
 
+// TODO: Maybe we should merge `voices_notes` and place them separately
 /// The polyphony mode
 #[derive(Clone)]
 enum Polyphony<const MAX_VOICES: usize> {
@@ -111,24 +116,30 @@ enum Polyphony<const MAX_VOICES: usize> {
         //  - For last it is the oldest triggered
         //  - For Highest and lowest the frequency comparison is done to store `next_note_index` with lowest/highest note
         last_voice_index: u8,
-        voices_notes: [MonoVoice; MAX_VOICES],
     },
     Unison {
         /// Unison voices count per voice group (one group per played note)
-        unison: u8,
+        unison: usize,
 
         /// Voices detune
-        detune: u8,
+        detune: UnitInterval,
 
-        /// Amount of blend between less and more detuned voices
-        blend: f32,
-
-        /// Voice groups. Each triggered note uses one group.
-        groups: [Option<VoiceGroup<MAX_VOICES>>; MAX_VOICES],
+        /// Amount of blend between less and more detuned voices where 0.0 is no detuned voices at all and 0.5 is the maximum value where detuned voices and center voice are equal in amplification
+        blend: HalfUnitInterval,
     },
 }
 
-impl<const MAX_VOICES: usize> Polyphony<MAX_VOICES> {}
+// FIXME: Not right
+impl<const MAX_VOICES: usize> PartialEq for Polyphony<MAX_VOICES> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Poly { .. }, Self::Poly { .. }) | (Self::Unison { .. }, Self::Unison { .. }) => {
+                true
+            }
+            _ => false,
+        }
+    }
+}
 
 // TODO: Use
 /// The order by which newly triggered notes take precedence over currently playing notes
@@ -150,8 +161,53 @@ where
     <O as Iterator>::Item: Sample,
 {
     voices: [Voice<O, SAMPLE_RATE>; VOICE_COUNT],
+    /// Voices root notes.
+    voices_notes: [MonoVoice; VOICE_COUNT],
     polyphony: Polyphony<VOICE_COUNT>,
     adsr: AdsrParams<SAMPLE_RATE>,
+}
+
+impl<O: Osc, const VOICE_COUNT: usize, const SAMPLE_RATE: u32> UiComponent
+    for VoicesController<O, VOICE_COUNT, SAMPLE_RATE>
+where
+    <O as Iterator>::Item: Sample,
+{
+    fn ui(&mut self, ui: &mut impl crate::param::ui::ParamUi) {
+        // TODO: Move from/to polyphony state
+        ui.select(
+            "Polyphony",
+            &mut self.polyphony,
+            &[
+                (
+                    "Poly",
+                    Polyphony::Poly {
+                        last_voice_index: 0,
+                    },
+                ),
+                (
+                    "Unison",
+                    Polyphony::Unison {
+                        unison: 1,
+                        detune: UnitInterval::new(0.5),
+                        blend: HalfUnitInterval::new(0.5),
+                    },
+                ),
+            ],
+        );
+
+        if let Polyphony::Unison {
+            unison,
+            detune,
+            blend,
+        } = &mut self.polyphony
+        {
+            ui.count("Unison", unison, (1, VOICE_COUNT));
+            ui.unit_interval("Detune", detune);
+            ui.half_unit_interval("Blend", blend);
+        }
+
+        self.adsr.ui(ui);
+    }
 }
 
 impl<O: Osc, const VOICE_COUNT: usize, const SAMPLE_RATE: u32>
@@ -163,43 +219,37 @@ where
         &self.voices[index]
     }
 
-    pub fn has_note(&self, note: Note) -> bool {
+    pub fn voices_detune(&self) -> Option<impl Iterator<Item = (f32, f32)>> {
         match &self.polyphony {
-            Polyphony::Poly {
-                last_voice_index,
-                voices_notes,
-            } => voices_notes.iter().any(|voice| voice.note == Some(note)),
-            Polyphony::Unison {
+            Polyphony::Poly { .. } => None,
+            &Polyphony::Unison {
                 unison,
                 detune,
                 blend,
-                groups,
-            } => {
-                todo!()
-            }
+                ..
+            } => Some(voices_detune(unison, detune, blend)),
         }
     }
 
+    pub fn iter_voices_mut(&mut self) -> impl Iterator<Item = &mut Voice<O, SAMPLE_RATE>> {
+        self.voices.iter_mut()
+    }
+
+    pub fn has_note(&self, note: Note) -> bool {
+        self.voices_notes
+            .iter()
+            .any(|voice| voice.note == Some(note))
+    }
+
     pub fn stop_all(&mut self) {
-        match &mut self.polyphony {
-            Polyphony::Poly {
-                last_voice_index,
-                voices_notes,
-            } => voices_notes
-                .iter_mut()
-                .enumerate()
-                .for_each(|(index, voice)| {
-                    if voice.note.take().is_some() {
-                        self.voices[index].note_off();
-                    }
-                }),
-            Polyphony::Unison {
-                unison,
-                detune,
-                blend,
-                groups,
-            } => todo!(),
-        }
+        self.voices_notes
+            .iter_mut()
+            .enumerate()
+            .for_each(|(index, voice)| {
+                if voice.note.take().is_some() {
+                    self.voices[index].note_off();
+                }
+            })
     }
 
     pub fn note_on(&mut self, note: Note, velocity: f32) {
@@ -211,31 +261,25 @@ where
             return;
         }
 
+        let mut note_on_voice = |index: usize, freq: Freq, velocity: f32, blend: f32| {
+            self.voices[index].osc.set_freq(freq);
+            self.voices[index].amp = blend;
+            self.voices[index].note_on(velocity);
+        };
+
         match &mut self.polyphony {
-            Polyphony::Poly {
-                last_voice_index,
-                voices_notes,
-            } => {
-                // let next_index = (*last_voice_index as usize + 1);
-                // let index = (next_index..VOICE_COUNT + next_index).find(|index| {
-                //     let index = index % VOICE_COUNT;
-                //     if
-                // });
-
-                // Note: This is [`NotePriority::Last`]
-
+            Polyphony::Poly { last_voice_index } => {
                 let oldest_index = (*last_voice_index as usize + 1) % VOICE_COUNT;
 
                 // TODO: This will find next free voice, but only free as "not triggered" while it can still be in release ADSR stage
                 // Find next free voice, if no free voice found, fallback to the oldest one and overwrite it
                 let index = (oldest_index..oldest_index + VOICE_COUNT)
-                    .find(|index| voices_notes[index % VOICE_COUNT].note.is_none())
+                    .find(|index| self.voices_notes[index % VOICE_COUNT].note.is_none())
                     .unwrap_or(oldest_index)
                     % VOICE_COUNT;
 
-                self.voices[index].osc.set_freq(note.freq());
-                self.voices[index].note_on(velocity);
-                voices_notes[index].note = Some(note);
+                note_on_voice(index, note.freq(), velocity, 1.0);
+                self.voices_notes[index].note = Some(note);
 
                 *last_voice_index = index as u8;
             }
@@ -243,37 +287,57 @@ where
                 unison,
                 detune,
                 blend,
-                groups,
             } => {
-                // Note: This is [`NotePriority::Last`]
+                let unison = *unison;
+                let detune = *detune;
+                let blend = *blend;
 
-                // let free_voices = (0..VOICE_COUNT).filter_map(|index| groups.iter().filter_map(|group| group.as_ref()).find(|group| group))
-                todo!()
+                // TODO: NotePriority
+                if self
+                    .voices_notes
+                    .iter()
+                    .filter(|voice| voice.note.is_none())
+                    .count()
+                    < unison
+                {
+                    return;
+                }
+
+                self.voices_notes
+                    .iter_mut()
+                    .enumerate()
+                    .filter_map(|(index, voice)| {
+                        if voice.note.is_none() {
+                            Some((index, voice))
+                        } else {
+                            None
+                        }
+                    })
+                    .take(unison)
+                    .zip(voices_detune(unison, detune, blend))
+                    .for_each(|((voice_index, voice), (detune, blend))| {
+                        note_on_voice(
+                            voice_index,
+                            Freq::from_num(note.freq().saturating_mul(detune.to_fixed())),
+                            velocity,
+                            blend,
+                        );
+                        voice.note = Some(note);
+                    });
             }
         }
     }
 
     pub fn note_off(&mut self, note: Note) {
-        match &mut self.polyphony {
-            Polyphony::Poly {
-                last_voice_index: _,
-                voices_notes,
-            } => {
-                if let Some(index) = voices_notes
-                    .iter()
-                    .position(|voice| voice.note == Some(note))
-                {
+        self.voices_notes
+            .iter_mut()
+            .enumerate()
+            .for_each(|(index, voice)| {
+                if voice.note == Some(note) {
                     self.voices[index].note_off();
-                    voices_notes[index].note = None;
+                    voice.note = None;
                 }
-            }
-            Polyphony::Unison {
-                unison,
-                detune,
-                blend,
-                groups,
-            } => {}
-        }
+            });
     }
 
     pub fn adsr(&self) -> &AdsrParams<SAMPLE_RATE> {
@@ -283,66 +347,7 @@ where
     pub fn adsr_mut(&mut self) -> &mut AdsrParams<SAMPLE_RATE> {
         &mut self.adsr
     }
-
-    // pub fn iter_all_voices_mut(&mut self) -> impl Iterator<Item = &mut Voice<O>> {
-    //     self.voices.iter_mut()
-    // }
-
-    // pub fn iter_active_voices_mut(&mut self) -> impl Iterator<Item = &mut Voice<O>> {
-    //     self.voices.iter_mut().take(self.unison)
-    // }
-
-    // pub fn iter_active_voices(&self) -> impl Iterator<Item = &Voice<O>> {
-    //     self.voices.iter().take(self.unison)
-    // }
-
-    // pub fn voices_detune(&self) -> impl Iterator<Item = (f32, f32)> {
-    //     voices_detune(self.unison(), self.detune, self.blend)
-    // }
-
-    // fn distribute_freq(&mut self) {
-    //     let center_freq = self.center_freq;
-    //     let detunes = voices_detune(self.unison(), self.detune, self.blend);
-
-    //     self.iter_active_voices_mut()
-    //         .zip(detunes)
-    //         .for_each(|(voice, (detune, amp))| {
-    //             // debug_assert!(amp >= 0.0 && amp <= 1.0, "Malformed amp {amp}");
-
-    //             let voice_freq = center_freq * detune;
-
-    //             voice.osc.set_freq(voice_freq);
-    //             voice.amp = amp;
-    //         });
-    // }
 }
-
-// impl<O: Osc, const SIZE: usize> Osc for VoicesController<O, SIZE>
-// where
-//     <O as Iterator>::Item: Sample,
-// {
-//     fn set_freq(&mut self, freq: f32) -> &mut Self {
-//         debug_assert!(
-//             freq >= 0.0 && freq.is_finite(),
-//             "Malformed frequency {freq}"
-//         );
-
-//         self.center_freq = freq;
-//         self.distribute_freq();
-//         self
-//     }
-
-//     fn freq(&self) -> f32 {
-//         self.center_freq
-//     }
-
-//     fn reset(&mut self) -> &mut Self {
-//         self.iter_active_voices_mut().for_each(|voice| {
-//             voice.osc.reset();
-//         });
-//         self
-//     }
-// }
 
 impl<O: Osc, const SIZE: usize, const SAMPLE_RATE: u32> VoicesController<O, SIZE, SAMPLE_RATE>
 where
@@ -353,47 +358,12 @@ where
             voices: core::array::from_fn(f),
             polyphony: Polyphony::Poly {
                 last_voice_index: 0,
-                voices_notes: core::array::from_fn(|_| MonoVoice { note: None }),
             },
             adsr: AdsrParams::default(),
+            voices_notes: core::array::from_fn(|_| MonoVoice { note: None }),
         }
     }
 }
-
-//     /// Clamps active to the size of the voice stack and a minimum is a single voice
-//     pub fn set_unison(&mut self, unison: usize) -> &mut Self {
-//         self.unison = unison.clamp(1, SIZE);
-//         self.distribute_freq();
-//         self
-//     }
-
-//     /// Count of active voices
-//     pub fn unison(&self) -> usize {
-//         self.unison
-//     }
-
-//     pub fn set_detune(&mut self, detune: f32) -> &mut Self {
-//         let detune = detune.clamp(0.0, 1.0);
-//         self.detune = detune;
-//         self.distribute_freq();
-//         self
-//     }
-
-//     pub fn detune(&self) -> f32 {
-//         self.detune
-//     }
-
-//     pub fn set_blend(&mut self, blend: f32) -> &mut Self {
-//         let blend = blend.clamp(0.0, 1.0);
-//         self.blend = blend;
-//         self.distribute_freq();
-//         self
-//     }
-
-//     pub fn blend(&self) -> f32 {
-//         self.blend
-//     }
-// }
 
 impl<O: Osc, const SIZE: usize, const SAMPLE_RATE: u32> Iterator
     for VoicesController<O, SIZE, SAMPLE_RATE>
@@ -403,42 +373,18 @@ where
     type Item = O::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // let attenuation = (self.active_count() as f32).sqrt();
-        // let voice_count = self.unison();
-        // let mix = self
-        //     .iter_active_voices_mut()
-        //     .map(|voice| (voice.osc.next().unwrap(), voice.amp))
-        //     .enumerate()
-        //     .fold(O::Item::zero(), |mix, (index, (sample, amp))| {
-        //         // sample.amp(amp).fold_mean(mix, index)
-        //         mix + sample.amp(amp / voice_count as f32)
-        //     });
-
-        // Some(mix)
-
         // Note: Check if this logic with Some(....sum()) is right. Maybe if all voices are off it should return None
 
-        match &self.polyphony {
-            Polyphony::Poly {
-                last_voice_index,
-                voices_notes,
-            } => Some(
-                (0..SIZE)
-                    .map(|index| {
-                        self.voices[index]
-                            .tick(&self.adsr)
-                            .map(|sample| sample.amp(1.0 / SIZE as f32))
-                            .unwrap_or(Self::Item::zero())
-                    })
-                    .sum(),
-            ),
-            Polyphony::Unison {
-                unison,
-                detune,
-                blend,
-                groups,
-            } => todo!(),
-        }
+        Some(
+            (0..SIZE)
+                .map(|index| {
+                    self.voices[index]
+                        .tick(&self.adsr)
+                        .map(|sample| sample.amp(1.0 / SIZE as f32))
+                        .unwrap_or(Self::Item::zero())
+                })
+                .sum(),
+        )
     }
 }
 
