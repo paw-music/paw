@@ -1,11 +1,16 @@
-pub mod time;
+use crate::param::f32::SignedUnitInterval;
+use core::{
+    iter::Sum,
+    ops::{Add, Sub},
+};
 
-use core::{iter::Sum, ops::{Add, Div, Sub}};
+pub mod time;
 
 pub trait Sample: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> + Sized + Sum {
     fn lerp(self, to: Self, num: u32, denom: u32) -> Self;
     fn saturating_add(self, other: Self) -> Self;
-    fn to_f32(self) -> f32;
+    // fn to_f32(self) -> f32;
+    fn to_sui(self) -> SignedUnitInterval;
     fn zero() -> Self;
     fn amp(self, amp: f32) -> Self;
     fn max(self, other: Self) -> Self;
@@ -30,8 +35,12 @@ impl Sample for u16 {
         self.saturating_add(other)
     }
 
-    fn to_f32(self) -> f32 {
-        ((self as f32) - (Self::MAX as f32)) / (Self::MAX as f32)
+    // fn to_f32(self) -> f32 {
+    //     ((self as f32) - (Self::MAX as f32)) / (Self::MAX as f32)
+    // }
+
+    fn to_sui(self) -> SignedUnitInterval {
+        SignedUnitInterval::new((self as f32 - Self::MAX as f32) / Self::MAX as f32)
     }
 
     fn zero() -> Self {
@@ -64,8 +73,12 @@ impl Sample for f32 {
         self + other
     }
 
-    fn to_f32(self) -> f32 {
-        self
+    // fn to_f32(self) -> f32 {
+    //     self
+    // }
+
+    fn to_sui(self) -> SignedUnitInterval {
+        SignedUnitInterval::new(self)
     }
 
     fn zero() -> Self {

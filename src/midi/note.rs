@@ -1,5 +1,3 @@
-use core::ops::Add;
-
 use num::FromPrimitive;
 
 macro_rules! notes {
@@ -19,9 +17,9 @@ macro_rules! notes {
 
             // pub fn from_freq(freq)
 
-            pub fn freq(&self) -> crate::value::freq::Freq {
+            pub fn freq(&self) -> f32 {
                 match self {
-                    $(Self::$name => crate::value::freq::Freq::from_num($freq)),*
+                    $(Self::$name => $freq),*
                 }
             }
         }
@@ -164,3 +162,7 @@ notes! {
     Fs8: 11839.82,
     G8: 12543.86,
 }
+
+// /// Physical key
+// #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+// pub struct Key(u8);

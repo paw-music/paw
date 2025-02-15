@@ -1,5 +1,3 @@
-use num::Integer;
-
 // #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 // pub struct IntRange<T: Integer = u8>(T);
 

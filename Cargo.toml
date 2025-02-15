@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+az = "1.2.1"
 egui = { version = "^0.23.0", optional = true }
 # az = "1.2.1"
 fixed = { version = "1.28.0" }

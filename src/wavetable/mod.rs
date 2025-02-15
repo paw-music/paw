@@ -1,15 +1,14 @@
-use crate::{sample::Sample, value::freq::Freq};
-use fixed::traits::ToFixed;
-use num_traits::Float;
-use osc::WavetableOsc;
+use crate::sample::Sample;
 
 pub mod osc;
+pub mod synth;
 
-pub struct WavetableRow<S, const LENGTH: usize> {
-    samples: [S; LENGTH],
+#[derive(Debug)]
+pub struct WavetableRow<const LENGTH: usize> {
+    samples: [f32; LENGTH],
 }
 
-impl<const LENGTH: usize> WavetableRow<f32, LENGTH> {
+impl<const LENGTH: usize> WavetableRow<LENGTH> {
     pub fn new(f: impl Fn(f32) -> f32) -> Self {
         Self {
             samples: core::array::from_fn(|index| {
@@ -20,9 +19,8 @@ impl<const LENGTH: usize> WavetableRow<f32, LENGTH> {
     }
 }
 
-// TODO: Integer samples
-impl<S: Sample, const LENGTH: usize> WavetableRow<S, LENGTH> {
-    pub fn lerp(&self, phase: f32) -> S {
+impl<const LENGTH: usize> WavetableRow<LENGTH> {
+    pub fn lerp(&self, phase: f32) -> f32 {
         debug_assert!(phase >= 0.0 && phase <= 1.0, "Malformed phase {phase}");
 
         // FIXME: phase of 1.0 * LENGTH is max size
@@ -37,30 +35,27 @@ impl<S: Sample, const LENGTH: usize> WavetableRow<S, LENGTH> {
     }
 }
 
-pub struct Wavetable<S: Sample, const DEPTH: usize, const LENGTH: usize> {
-    rows: [WavetableRow<S, LENGTH>; DEPTH],
+#[derive(Debug)]
+pub struct Wavetable<const DEPTH: usize, const LENGTH: usize> {
+    rows: [WavetableRow<LENGTH>; DEPTH],
 }
 
-impl<S: Sample, const DEPTH: usize, const LENGTH: usize> Wavetable<S, DEPTH, LENGTH> {
-    pub fn from_rows(rows: [WavetableRow<S, LENGTH>; DEPTH]) -> Self {
+impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
+    pub fn from_rows(rows: [WavetableRow<LENGTH>; DEPTH]) -> Self {
         Self { rows }
     }
 
     // TODO: f32 depth so we interpolate in depth too?
-    pub fn at(&self, depth: usize, phase: f32) -> S {
+    pub fn at(&self, depth: usize, phase: f32) -> f32 {
         debug_assert!(phase >= 0.0 && phase <= 1.0, "Malformed phase {phase}");
 
         let row = &self.rows[depth % DEPTH];
 
         row.lerp(phase)
     }
-
-    pub fn osc<const SAMPLE_RATE: u32>(&self) -> WavetableOsc<'_, S, SAMPLE_RATE, DEPTH, LENGTH> {
-        WavetableOsc::new(self)
-    }
 }
 
-impl<const DEPTH: usize, const LENGTH: usize> Wavetable<f32, DEPTH, LENGTH> {
+impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
     pub fn new(amp: impl Fn(usize, f32) -> f32) -> Self {
         // let pitch_step = (max_pitch - min_pitch) / DEPTH.to_fixed::<Freq>();
         let rows = core::array::from_fn(|depth| {
