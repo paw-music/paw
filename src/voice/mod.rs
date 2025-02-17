@@ -23,24 +23,27 @@ pub struct Voice<O: Osc, const LFOS: usize, const ENVS: usize, const OSCS: usize
     root_freq: f32,
     detune: SignedUnitInterval,
     blend: UnitInterval,
-    envs: EnvPack<ENVS, OSCS>,
+    envs: EnvPack<ENVS>,
     lfos: LfoPack<LFOS, OSCS>,
+    velocity: UnitInterval,
 }
 
 impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize> MidiEventListener
     for Voice<O, LFOS, ENVS, OSCS>
 {
-    fn note_on(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
+    fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.root_freq = note.freq();
+        self.velocity = velocity;
 
         // self.oscs.note_on(self.root_freq);
-        self.envs.note_on(note, velocity);
-        self.lfos.note_on(note, velocity);
+        self.envs.note_on(clock, note, velocity);
+        self.lfos.note_on(clock, note, velocity);
     }
 
-    fn note_off(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
-        self.envs.note_off(note, velocity);
-        self.lfos.note_off(note, velocity);
+    fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
+        self.velocity = UnitInterval::MIN;
+        self.envs.note_off(clock, note, velocity);
+        self.lfos.note_off(clock, note, velocity);
     }
 }
 
@@ -55,6 +58,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
             blend: UnitInterval::MAX,
             envs: EnvPack::new(),
             lfos: LfoPack::new(),
+            velocity: UnitInterval::MIN,
         }
     }
 
@@ -70,7 +74,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
     ) -> Option<SignedUnitInterval> {
         let pitch_mod = self
             .envs
-            .tick(EnvTarget::SynthPitch, &params.env_params)
+            .tick(clock, EnvTarget::SynthPitch, &params.env_params)
             .map(|pitch_mod| pitch_mod.remap_into_signed())
             .or_else(|| {
                 self.lfos
@@ -85,22 +89,19 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
 
         let amp_mod = self
             .envs
-            .tick(EnvTarget::SynthLevel, &params.env_params)
+            .tick(clock, EnvTarget::SynthLevel, &params.env_params)
             .or_else(|| {
                 self.lfos
                     .tick(clock, LfoTarget::GlobalLevel, params.lfo_params)
-                    .map(|amp_mod| amp_mod.remap_into_unsigned())
-            });
+                    .map(|amp_mod| amp_mod.remap_into_unsigned() * self.velocity)
+            })
+            .unwrap_or(self.velocity);
 
-        self.oscs.tick(clock, freq, params.osc_props).map(|sample| {
-            let sample = if let Some(amp_mod) = amp_mod {
-                sample * amp_mod
-            } else {
-                sample
-            };
+        let amp = self.blend * amp_mod;
 
-            sample * self.blend
-        })
+        self.oscs
+            .tick(clock, freq, params.osc_props)
+            .map(|sample| sample * amp)
     }
 }
 

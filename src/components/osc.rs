@@ -30,7 +30,7 @@ impl<
         note: crate::midi::note::Note,
         velocity: crate::param::f32::UnitInterval,
     ) {
-        self.voices.note_on(note, velocity);
+        self.voices.note_on(clock, note, velocity);
     }
 
     fn note_off(
@@ -38,7 +38,7 @@ impl<
         note: crate::midi::note::Note,
         velocity: crate::param::f32::UnitInterval,
     ) {
-        self.voices.note_off(note, velocity);
+        self.voices.note_off(clock, note, velocity);
     }
 }
 

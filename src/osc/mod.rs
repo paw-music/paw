@@ -75,7 +75,7 @@ where
 // The state of the oscillator
 #[derive(Debug, Clone, Copy)]
 pub struct OscState {
-    last_tick: u32,
+    last_cycle: u32,
     // freq: f32,
 }
 
@@ -100,7 +100,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
         Self {
             oscs: core::array::from_fn(osc),
             states: core::array::from_fn(|_| OscState {
-                last_tick: 0,
+                last_cycle: 0,
                 // freq: 0.0,
             }),
         }
@@ -147,7 +147,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
                         _ => freq,
                     };
 
-                    let phase = clock.phase(freq, &mut state.last_tick);
+                    let phase = clock.phase(freq, &mut state.last_cycle);
 
                     let output: SignedUnitInterval = osc.tick(phase, &props.osc);
 

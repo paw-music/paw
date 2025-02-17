@@ -40,7 +40,7 @@ impl Sample for u16 {
     // }
 
     fn to_sui(self) -> SignedUnitInterval {
-        SignedUnitInterval::new((self as f32 - Self::MAX as f32) / Self::MAX as f32)
+        SignedUnitInterval::new_checked((self as f32 - Self::MAX as f32) / Self::MAX as f32)
     }
 
     fn zero() -> Self {

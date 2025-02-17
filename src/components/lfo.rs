@@ -94,7 +94,7 @@ impl<const OSCS: usize> UiComponent for LfoParams<OSCS> {
                 &mut self.waveform,
                 [
                     // TODO: Preserve pulse width
-                    ("Pulse", LfoWaveform::Pulse(UnitInterval::new(0.5))),
+                    ("Pulse", LfoWaveform::Pulse(UnitInterval::EQUILIBRIUM)),
                     ("Sine", LfoWaveform::Sine),
                     ("Triangle", LfoWaveform::Triangle),
                     ("Saw", LfoWaveform::Saw),
@@ -128,20 +128,20 @@ impl<const OSCS: usize> UiComponent for LfoParams<OSCS> {
 pub struct Lfo<const OSCS: usize> {
     state: bool,
     // phase: f32,
-    last_tick: u32,
+    last_cycle: u32,
     // TODO: Start phase?
 }
 
 impl<const OSCS: usize> MidiEventListener for Lfo<OSCS> {
-    fn note_on(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
+    fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = velocity;
         let _ = note;
         // self.phase = 0.0;
-        self.last_tick = 0;
+        self.last_cycle = 0;
         self.state = true;
     }
 
-    fn note_off(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
+    fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = velocity;
         let _ = note;
         // self.phase = 0.0;
@@ -153,7 +153,7 @@ impl<const OSCS: usize> Lfo<OSCS> {
     pub fn new() -> Self {
         Self {
             // phase: 0.0,
-            last_tick: 0,
+            last_cycle: 0,
             state: false,
         }
     }
@@ -185,7 +185,7 @@ impl<const OSCS: usize> Lfo<OSCS> {
 
         // let phase = self.index as f32 / SAMPLE_RATE as f32;
 
-        let phase = clock.phase(params.freq, &mut self.last_tick);
+        let phase = clock.phase(params.freq, &mut self.last_cycle);
 
         if !self.state && phase == 0.0 {
             return SignedUnitInterval::EQUILIBRIUM;
@@ -204,16 +204,16 @@ pub struct LfoPack<const SIZE: usize, const OSCS: usize> {
 }
 
 impl<const SIZE: usize, const OSCS: usize> MidiEventListener for LfoPack<SIZE, OSCS> {
-    fn note_on(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
+    fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.lfos
             .iter_mut()
-            .for_each(|lfo| lfo.note_on(note, velocity));
+            .for_each(|lfo| lfo.note_on(clock, note, velocity));
     }
 
-    fn note_off(&mut self, note: crate::midi::note::Note, velocity: UnitInterval) {
+    fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.lfos
             .iter_mut()
-            .for_each(|lfo| lfo.note_off(note, velocity));
+            .for_each(|lfo| lfo.note_off(clock, note, velocity));
     }
 }
 

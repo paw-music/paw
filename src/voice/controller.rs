@@ -24,9 +24,9 @@ pub fn voices_detune(
             let center_offset = (index as f32 + 0.5) / half_detuned_voices - 1.0;
 
             (
-                SignedUnitInterval::new(center_offset * detune.inner()),
+                SignedUnitInterval::new_checked(center_offset * detune.inner()),
                 // This equation means that centered voices are one or two nearest to center. For odd number of voices, there's a center voice with `center_offset` being 0.0, while for even number of voices there're two with distance dependent on count of voices.
-                UnitInterval::new(
+                UnitInterval::new_checked(
                     if center_offset.abs() - center_area <= f32::EPSILON {
                         1.0 - blend.inner()
                     } else {
@@ -142,8 +142,8 @@ impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OS
                         "Unison",
                         Polyphony::Unison {
                             unison: 1,
-                            detune: UnitInterval::new(0.5),
-                            blend: HalfUnitInterval::new(0.5),
+                            detune: UnitInterval::EQUILIBRIUM,
+                            blend: HalfUnitInterval::MAX,
                         },
                     ),
                 ]
@@ -181,7 +181,7 @@ impl<
         const OSCS: usize,
     > MidiEventListener for VoicesController<O, VOICES, LFOS, ENVS, OSCS>
 {
-    fn note_on(&mut self, note: Note, velocity: UnitInterval) {
+    fn note_on(&mut self, clock: &Clock, note: Note, velocity: UnitInterval) {
         // TODO: What to do if there're no available voices? Queue? Ignore?
         // TODO: Priority
 
@@ -197,7 +197,7 @@ impl<
                                  blend: UnitInterval| {
             // FIXME: Voice amp is not right for blend, use separate state
             self.voices[index].set_detune(blend, detune);
-            self.voices[index].note_on(note, velocity);
+            self.voices[index].note_on(clock, note, velocity);
         };
 
         match &mut self.polyphony {
@@ -262,7 +262,7 @@ impl<
         }
     }
 
-    fn note_off(&mut self, note: Note, velocity: UnitInterval) {
+    fn note_off(&mut self, clock: &Clock, note: Note, velocity: UnitInterval) {
         let _ = velocity;
 
         self.voices_notes
@@ -270,7 +270,7 @@ impl<
             .enumerate()
             .for_each(|(index, voice)| {
                 if voice.note == Some(note) {
-                    self.voices[index].note_off(note, velocity);
+                    self.voices[index].note_off(clock, note, velocity);
                     voice.note = None;
                 }
             });

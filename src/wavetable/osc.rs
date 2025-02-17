@@ -87,7 +87,7 @@ impl<const DEPTH: usize, const LENGTH: usize> Osc for WavetableOsc<DEPTH, LENGTH
 
         // self.phase = (self.phase + self.freq / params. as f32).fract();
 
-        SignedUnitInterval::new(sample)
+        SignedUnitInterval::new_checked(sample)
     }
 
     // fn reset(&mut self) -> &mut Self {

@@ -10,11 +10,15 @@ impl Clock {
         Self { sample_rate, tick }
     }
 
-    pub fn phase(&self, freq: f32, last_tick: &mut u32) -> f32 {
-        let delta = self.tick - *last_tick;
+    pub fn phase(&self, freq: f32, last_cycle: &mut u32) -> f32 {
+        let delta = self.tick - *last_cycle;
 
-        *last_tick = self.tick;
+        let phase = delta as f32 * freq / self.sample_rate as f32;
 
-        (delta as f32 * freq / self.sample_rate as f32).fract()
+        if phase > 1.0 {
+            *last_cycle = self.tick;
+        }
+
+        phase.fract()
     }
 }

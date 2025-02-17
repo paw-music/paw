@@ -1,22 +1,25 @@
 use crate::{
-    midi::{event::MidiEventListener, note::Note},
+    midi::event::MidiEventListener,
+    osc::clock::Clock,
     param::{f32::UnitInterval, ui::UiComponent},
     sample::time::SampleCount,
 };
 
-// const BASE_SAMPLE_RATE: u32 = 48_000;
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EnvTarget {
+    #[default]
+    SynthLevel,
+    SynthPitch,
+    WtPos(usize),
+}
 
-// /// Minimum attack possible to set
-// const MIN_ATTACK: SampleCount<BASE_SAMPLE_RATE> = SampleCount::from_millis(1);
-// const MIN_RELEASE: SampleCount<BASE_SAMPLE_RATE> = SampleCount::from_millis(1);
-
-// TODO: Non-linear envelopes
-/// ADSR parameters in samples
 #[derive(Debug)]
 pub struct EnvParams<const OSCS: usize> {
     pub enabled: bool,
     pub amount: UnitInterval,
     pub target: EnvTarget,
+
+    // Stages //
     pub delay: SampleCount,
     pub attack: SampleCount,
     pub hold: SampleCount,
@@ -35,8 +38,8 @@ impl<const OSCS: usize> UiComponent for EnvParams<OSCS> {
             }
 
             let time_clamp = (
-                SampleCount::from_millis(1, &params.clock),
-                SampleCount::from_seconds(10, &params.clock),
+                SampleCount::from_millis(1, params.clock.sample_rate),
+                SampleCount::from_seconds(10, params.clock.sample_rate),
             );
 
             ui.sample_count("Delay", &mut self.delay, Some(time_clamp), &params.clock);
@@ -68,204 +71,179 @@ impl<const OSCS: usize> UiComponent for EnvParams<OSCS> {
 }
 
 impl<const OSCS: usize> EnvParams<OSCS> {
-    pub fn before_sustain(&self) -> SampleCount {
-        self.delay + self.attack + self.hold + self.decay
-    }
-}
+    // fn before_sustain(&self, position: u32) -> Option<f32> {
+    //     [(self.delay, 0.0), (self.attack, ), self.hold, self.decay]
+    //         .iter()
+    //         .try_fold(
+    //             (0, self.delay.inner()),
+    //             |(stage_pos, stage_end), stage_len| {
+    //                 if position <= stage_end {
+    //                     Err(stage_pos as f32 / stage_len.inner() as f32)
+    //                 } else {
+    //                     Ok((position - stage_end, stage_end + stage_len.inner()))
+    //                 }
+    //             },
+    //         )
+    //         .err()
+    // }
 
-impl<const OSCS: usize> Default for EnvParams<OSCS> {
-    fn default() -> Self {
+    pub fn new(sample_rate: u32) -> Self {
         Self {
             enabled: false,
             amount: UnitInterval::MAX,
-            target: Default::default(),
-            delay: SampleCount::ZERO,
-            attack: SampleCount::new(50),
-            hold: SampleCount::ZERO,
-            decay: SampleCount::ZERO,
-            sustain: UnitInterval::new(1.0),
-            release: SampleCount::new(50),
+            target: EnvTarget::default(),
+            delay: SampleCount::zero(),
+            attack: SampleCount::from_millis(1, sample_rate),
+            hold: SampleCount::zero(),
+            decay: SampleCount::zero(),
+            sustain: UnitInterval::MAX,
+            release: SampleCount::from_millis(1, sample_rate),
+        }
+    }
+
+    fn attack_endpoint(&self, velocity: f32) -> f32 {
+        if self.decay.is_zero() {
+            velocity
+        } else {
+            self.sustain.inner()
+        }
+    }
+
+    fn before_sustain(&self, pos: u32, velocity: f32) -> Option<f32> {
+        let stage_end = self.delay.inner();
+
+        if pos <= stage_end {
+            return Some(0.0);
+        }
+
+        let stage_phase = pos - stage_end;
+        let stage_end = stage_end + self.attack.inner();
+
+        if pos <= stage_end {
+            return Some(
+                stage_phase as f32 / self.attack.inner() as f32 * self.attack_endpoint(velocity),
+            );
+        }
+
+        let stage_end = stage_end + self.hold.inner();
+
+        if pos <= stage_end {
+            return Some(velocity);
+        }
+
+        let stage_phase = pos - stage_end;
+        let stage_end = stage_end + self.decay.inner();
+
+        if pos <= stage_end {
+            return Some(
+                1.0 - stage_phase as f32 / self.decay.inner() as f32
+                    * (self.attack_endpoint(velocity) - self.sustain.inner()).abs(),
+            );
+        }
+
+        None
+    }
+
+    fn after_sustain(&self, pos: u32) -> Option<f32> {
+        if pos <= self.release.inner() {
+            Some((1.0 - pos as f32 / self.release.inner() as f32) * self.sustain.inner())
+        } else {
+            None
         }
     }
 }
 
-/// Current ADSR stage and state
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum EnvStage {
+enum EnvState {
     Idle,
-    Delay(u32),
-    Attack(u32),
-    Hold(u32),
-    Decay(u32),
-    Sustain,
-    Release(u32),
+    NoteOn {
+        velocity: UnitInterval,
+        at_tick: u32,
+    },
+    NoteOff {
+        at_tick: u32,
+    },
 }
 
-impl EnvStage {
-    fn note_on(&mut self) {
-        *self = Self::Delay(0);
+pub struct Env {
+    state: EnvState,
+}
+
+impl MidiEventListener for Env {
+    fn note_on(&mut self, clock: &Clock, _note: crate::midi::note::Note, velocity: UnitInterval) {
+        self.state = EnvState::NoteOn {
+            velocity,
+            at_tick: clock.tick,
+        }
     }
 
-    fn note_off(&mut self) {
-        // TODO: Smart note_off with declicking. Not going right to the release but ending current stage softly.
-        *self = Self::Release(0);
-    }
-
-    /// Increment sample index, returns true if ADSR stage is changed
-    fn maybe_advance<const OSCS: usize>(&mut self, params: &EnvParams<OSCS>) -> bool {
-        match self {
-            Self::Idle => false,
-            Self::Delay(sample) => {
-                if params.delay <= *sample {
-                    *self = Self::Attack(0);
-                    true
-                } else {
-                    *sample += 1;
-                    false
-                }
-            }
-            Self::Attack(sample) => {
-                if params.attack <= *sample {
-                    *self = Self::Hold(0);
-                    true
-                } else {
-                    *sample += 1;
-                    false
-                }
-            }
-            Self::Hold(sample) => {
-                if params.hold <= *sample {
-                    *self = Self::Decay(0);
-                    true
-                } else {
-                    *sample += 1;
-                    false
-                }
-            }
-            Self::Decay(sample) => {
-                if params.decay <= *sample {
-                    *self = Self::Sustain;
-                    true
-                } else {
-                    *sample += 1;
-                    false
-                }
-            }
-            Self::Sustain => false,
-            Self::Release(sample) => {
-                if params.release <= *sample {
-                    *self = Self::Idle;
-                    true
-                } else {
-                    *sample += 1;
-                    false
-                }
-            }
+    fn note_off(&mut self, clock: &Clock, _note: crate::midi::note::Note, _velocity: UnitInterval) {
+        self.state = EnvState::NoteOff {
+            at_tick: clock.tick,
         }
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EnvTarget {
-    #[default]
-    SynthLevel,
-    SynthPitch,
-    WtPos(usize),
-}
-
-pub struct Env<const OSCS: usize> {
-    stage: EnvStage,
-    /// The attack peak (triggered note velocity)
-    velocity: f32,
-}
-
-impl<const OSCS: usize> MidiEventListener for Env<OSCS> {
-    fn note_on(&mut self, note: Note, velocity: UnitInterval) {
-        let _ = note;
-        self.velocity = velocity.inner();
-        self.stage.note_on();
-    }
-
-    fn note_off(&mut self, note: Note, velocity: UnitInterval) {
-        let _ = velocity;
-        let _ = note;
-        self.stage.note_off();
-    }
-}
-
-impl<const OSCS: usize> Env<OSCS> {
+impl Env {
     pub fn new() -> Self {
         Self {
-            stage: EnvStage::Idle,
-            velocity: 0.0,
+            state: EnvState::Idle,
         }
     }
 
-    fn attack_endpoint(&self, params: &EnvParams<OSCS>) -> f32 {
-        // TODO: Check this. It will avoid usage of peak (note velocity) in case of zero decay. This is done to avoid high-frequency amplitude jump, but may be incorrect for user needs.
-        if params.decay > SampleCount::ZERO {
-            self.velocity
-        } else {
-            params.sustain.inner()
+    pub fn tick<const OSCS: usize>(
+        &mut self,
+        clock: &Clock,
+        params: &EnvParams<OSCS>,
+    ) -> Option<UnitInterval> {
+        match self.state {
+            EnvState::Idle => None,
+            EnvState::NoteOn { velocity, at_tick } => {
+                if let Some(before_sustain) =
+                    params.before_sustain(clock.tick - at_tick, velocity.inner())
+                {
+                    Some(UnitInterval::new(before_sustain))
+                } else {
+                    Some(params.sustain)
+                }
+            }
+            EnvState::NoteOff { at_tick } => params
+                .after_sustain(clock.tick - at_tick)
+                .map(UnitInterval::new),
         }
-    }
-
-    /// [0.0; 1.0]
-    pub fn tick(&mut self, params: &EnvParams<OSCS>) -> Option<UnitInterval> {
-        if !params.enabled {
-            return Some(UnitInterval::MAX);
-        }
-
-        while self.stage.maybe_advance(&params) {}
-
-        let value = match self.stage {
-            EnvStage::Idle => return None,
-            EnvStage::Delay(_) => 0.0,
-            EnvStage::Attack(sample) => {
-                sample as f32 / params.attack.inner() as f32 * self.attack_endpoint(params)
-            }
-            EnvStage::Hold(_) => self.velocity,
-            EnvStage::Decay(sample) => {
-                1.0 - sample as f32 / params.decay.inner() as f32
-                    * ((self.attack_endpoint(params) - params.sustain.inner()).abs())
-            }
-            EnvStage::Sustain => params.sustain.inner(),
-            EnvStage::Release(sample) => {
-                params.sustain.inner()
-                    - sample as f32 / params.release.inner() as f32 * params.sustain.inner()
-            }
-        };
-
-        Some(UnitInterval::new_checked(value))
     }
 }
 
-pub struct EnvPack<const SIZE: usize, const OSCS: usize> {
-    envs: [Env<OSCS>; SIZE],
+pub struct EnvPack<const SIZE: usize> {
+    envs: [Env; SIZE],
 }
 
-impl<const SIZE: usize, const OSCS: usize> MidiEventListener for EnvPack<SIZE, OSCS> {
-    fn note_on(&mut self, note: Note, velocity: UnitInterval) {
+impl<const SIZE: usize> MidiEventListener for EnvPack<SIZE> {
+    fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.envs
             .iter_mut()
-            .for_each(|env| env.note_on(note, velocity));
+            .for_each(|env| env.note_on(clock, note, velocity));
     }
 
-    fn note_off(&mut self, note: Note, velocity: UnitInterval) {
+    fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.envs
             .iter_mut()
-            .for_each(|env| env.note_off(note, velocity));
+            .for_each(|env| env.note_off(clock, note, velocity));
     }
 }
 
-impl<const SIZE: usize, const OSCS: usize> EnvPack<SIZE, OSCS> {
+impl<const SIZE: usize> EnvPack<SIZE> {
     pub fn new() -> Self {
         Self {
             envs: core::array::from_fn(|_| Env::new()),
         }
     }
 
-    pub fn tick(&mut self, target: EnvTarget, params: &[EnvParams<OSCS>]) -> Option<UnitInterval> {
+    pub fn tick<const OSCS: usize>(
+        &mut self,
+        clock: &Clock,
+        target: EnvTarget,
+        params: &[EnvParams<OSCS>],
+    ) -> Option<UnitInterval> {
         debug_assert_eq!(params.len(), self.envs.len());
 
         params
@@ -273,7 +251,7 @@ impl<const SIZE: usize, const OSCS: usize> EnvPack<SIZE, OSCS> {
             .zip(self.envs.iter_mut())
             .filter_map(|(params, env)| {
                 if params.target == target {
-                    Some(env.tick(params).unwrap_or(UnitInterval::MIN))
+                    Some(env.tick(clock, params).unwrap_or(UnitInterval::MIN))
                 } else {
                     None
                 }

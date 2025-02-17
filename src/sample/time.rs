@@ -45,43 +45,47 @@ impl SampleCount {
         Self::new(u32::MAX)
     }
 
-    pub const fn second(clock: &Clock) -> Self {
-        Self::new(clock.sample_rate)
+    pub const fn second(sample_rate: u32) -> Self {
+        Self::new(sample_rate)
     }
 
-    pub const fn millisecond(clock: &Clock) -> Self {
-        Self::new(clock.sample_rate / 1_000)
+    pub const fn millisecond(sample_rate: u32) -> Self {
+        Self::new(sample_rate / 1_000)
     }
 
     /// Create SampleCount from seconds
-    pub const fn from_seconds(seconds: u32, clock: &Clock) -> Self {
-        Self::new(Self::second(clock).0 * seconds)
+    pub const fn from_seconds(seconds: u32, sample_rate: u32) -> Self {
+        Self::new(Self::second(sample_rate).0 * seconds)
     }
 
     /// Create SampleCount from milliseconds rounding to ceiling
-    pub const fn from_millis(millis: u32, clock: &Clock) -> Self {
-        Self::new(Self::millisecond(clock).inner() * millis)
+    pub const fn from_millis(millis: u32, sample_rate: u32) -> Self {
+        Self::new(Self::millisecond(sample_rate).inner() * millis)
         // Self::new((SAMPLE_RATE * millis).div_ceil(1_000))
     }
 
-    pub const fn from_millis_f32(millis: f32, clock: &Clock) -> Self {
-        Self::new((clock.sample_rate as f32 / 1_000.0 * millis) as u32)
+    pub const fn from_millis_f32(millis: f32, sample_rate: u32) -> Self {
+        Self::new((sample_rate as f32 / 1_000.0 * millis) as u32)
     }
 
     /// Get milliseconds from sample count rounding to ceiling
-    pub const fn seconds(self, clock: &Clock) -> u32 {
+    pub const fn seconds(self, sample_rate: u32) -> u32 {
         // self.0.div_ceil(SAMPLE_RATE)
-        self.0 / clock.sample_rate
+        self.0 / sample_rate
     }
 
     /// Get milliseconds from sample count rounding to ceiling
-    pub const fn millis(self, clock: &Clock) -> u32 {
+    pub const fn millis(self, sample_rate: u32) -> u32 {
         // (self.0 * 1_000).div_ceil(SAMPLE_RATE)
-        self.0 * 1_000 / clock.sample_rate
+        self.0 * 1_000 / sample_rate
     }
 
-    pub const fn millis_f32(self, clock: &Clock) -> f32 {
-        self.0 as f32 * 1_000.0 / clock.sample_rate as f32
+    pub const fn millis_f32(self, sample_rate: u32) -> f32 {
+        self.0 as f32 * 1_000.0 / sample_rate as f32
+    }
+
+    pub const fn is_zero(&self) -> bool {
+        self.inner() == 0
     }
 }
 
@@ -103,7 +107,6 @@ impl Mul<u32> for SampleCount {
 
 #[cfg(test)]
 mod tests {
-    
 
     // #[test]
     // fn constants() {

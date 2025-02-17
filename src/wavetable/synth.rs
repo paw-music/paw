@@ -43,7 +43,7 @@ pub struct WtSynth<
 
     env_params: [EnvParams<OSCS>; ENVS],
     /// Global ADSRs (envelopes)
-    envs: EnvPack<ENVS, OSCS>,
+    envs: EnvPack<ENVS>,
 
     osc_props: [OscProps<'static, WavetableOsc<WAVETABLE_DEPTH, WAVETABLE_LENGTH>>; OSCS],
 
@@ -102,16 +102,16 @@ impl<
         const OSCS: usize,
     > MidiEventListener for WtSynth<WAVETABLE_DEPTH, WAVETABLE_LENGTH, VOICES, LFOS, ENVS, OSCS>
 {
-    fn note_on(&mut self, note: Note, velocity: UnitInterval) {
-        self.envs.note_on(note, velocity);
-        self.lfos.note_on(note, velocity);
-        self.voices.note_on(note, velocity);
+    fn note_on(&mut self, clock: &Clock, note: Note, velocity: UnitInterval) {
+        self.envs.note_on(clock, note, velocity);
+        self.lfos.note_on(clock, note, velocity);
+        self.voices.note_on(clock, note, velocity);
     }
 
-    fn note_off(&mut self, note: Note, velocity: UnitInterval) {
-        self.envs.note_off(note, velocity);
-        self.lfos.note_off(note, velocity);
-        self.voices.note_off(note, velocity);
+    fn note_off(&mut self, clock: &Clock, note: Note, velocity: UnitInterval) {
+        self.envs.note_off(clock, note, velocity);
+        self.lfos.note_off(clock, note, velocity);
+        self.voices.note_off(clock, note, velocity);
     }
 }
 
@@ -131,7 +131,7 @@ impl<
         Self {
             lfo_params: core::array::from_fn(|_| LfoParams::default()),
             lfos: LfoPack::new(),
-            env_params: core::array::from_fn(|_| EnvParams::default()),
+            env_params: core::array::from_fn(|_| EnvParams::new(sample_rate)),
             envs: EnvPack::new(),
             osc_props: core::array::from_fn(|_| {
                 OscProps::new(WavetableParams::new(&default_wavetable))

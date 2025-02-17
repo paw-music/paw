@@ -7,6 +7,14 @@ use core::{
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UnitInterval(f32);
 
+impl Mul for UnitInterval {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::new(self.inner() * rhs.inner())
+    }
+}
+
 impl UnitInterval {
     pub const RANGE: RangeInclusive<f32> = 0.0..=1.0;
     pub const MIN: Self = Self(0.0);

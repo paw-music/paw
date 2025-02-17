@@ -44,7 +44,7 @@ impl ParamUi for egui::Ui {
         self.add(
             egui::Slider::from_get_set(0.0..=1.0, |new_value| {
                 if let Some(new_value) = new_value {
-                    *value = UnitInterval::new(new_value as f32);
+                    *value = UnitInterval::new_checked(new_value as f32);
                 }
 
                 value.inner() as f64
