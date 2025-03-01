@@ -5,7 +5,6 @@ use crate::{
 };
 
 pub mod osc;
-pub mod synth;
 
 #[derive(Debug)]
 pub struct WavetableRow<const LENGTH: usize> {

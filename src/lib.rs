@@ -22,3 +22,4 @@ pub mod wavetable;
 pub mod fx;
 pub mod buffer;
 pub mod synth;
+pub mod daw;

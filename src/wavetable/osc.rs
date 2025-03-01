@@ -24,9 +24,9 @@ impl<const DEPTH: usize, const LENGTH: usize> Default for WavetableOsc<DEPTH, LE
 impl<const DEPTH: usize, const LENGTH: usize> Osc for WavetableOsc<DEPTH, LENGTH> {
     type Props<'a> = WavetableProps<'a, DEPTH, LENGTH>;
 
-    fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> SignedUnitInterval {
+    fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> f32 {
         let sample = params.lerp(phase);
 
-        SignedUnitInterval::new_checked(sample)
+        sample
     }
 }

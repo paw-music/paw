@@ -8,7 +8,7 @@ use crate::param::f32::{SignedUnitInterval, UnitInterval};
 use super::Sample;
 
 #[derive(Clone, Copy)]
-pub struct Frame<T = SignedUnitInterval, const SIZE: usize = 2> {
+pub struct Frame<T = f32, const SIZE: usize = 2> {
     channels: [T; SIZE],
 }
 
@@ -47,12 +47,12 @@ impl<T> Frame<T, 2> {
     }
 }
 
-impl Frame<SignedUnitInterval, 2> {
+impl Frame<f32, 2> {
     pub fn balanced(&self, balance: UnitInterval) -> Self {
         Self {
             channels: [
                 self.channels[0] * (1.0 - balance.inner()),
-                self.channels[1] * balance,
+                self.channels[1] * balance.inner(),
             ],
         }
     }

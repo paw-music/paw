@@ -51,7 +51,7 @@ impl<const SIZE: usize> Delay<SIZE> {
         // Write new feedback
         let write = input
             .zip(feedback, |&input, &feedback| {
-                (input.inner() + feedback) * params.feedback.inner()
+                (input + feedback) * params.feedback.inner()
             })
             .zip_mut(&mut self.flt, |feedback, flt| flt.process(*feedback));
 
@@ -62,7 +62,7 @@ impl<const SIZE: usize> Delay<SIZE> {
 
         self.bb.set(index, write);
 
-        let mix = input + feedback.map(|val| SignedUnitInterval::new(val * params.amount.inner()));
+        let mix = input + feedback.map(|val| val * params.amount.inner());
 
         mix
     }

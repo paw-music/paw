@@ -13,7 +13,7 @@ pub mod clock;
 pub trait Osc: Sized + Default {
     type Props<'a>: Copy + Modulate;
 
-    fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> SignedUnitInterval;
+    fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> f32;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,10 +28,10 @@ pub enum OscOutput {
 #[derive(Debug, Clone, Copy)]
 pub enum OscMod {
     None,
-    Direct(SignedUnitInterval),
-    FM(SignedUnitInterval),
-    AM(UnitInterval),
-    RM(SignedUnitInterval),
+    Direct(f32),
+    FM(f32),
+    AM(f32),
+    RM(f32),
 }
 
 /// The properties of oscillator component. Global for all oscillator instances.
@@ -180,24 +180,21 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
         clock: &Clock,
         freq: f32,
         params: &[OscParams<'a, O, OSCS>],
-    ) -> Option<SignedUnitInterval> {
+    ) -> Option<f32> {
         let (_, output) = self
             .oscs
             .iter_mut()
             .zip(params)
             .zip(self.states.iter_mut())
             .fold(
-                (
-                    OscMod::Direct(SignedUnitInterval::EQUILIBRIUM),
-                    SignedUnitInterval::EQUILIBRIUM,
-                ),
+                (OscMod::Direct(0.0), 0.0),
                 |(modulation, mix), ((osc, params), state)| {
                     if !params.props.enabled {
                         return (OscMod::None, mix);
                     }
 
                     let osc_fm = match modulation {
-                        OscMod::FM(m) => m.inner(),
+                        OscMod::FM(m) => m,
                         _ => 0.0,
                     };
 
@@ -205,7 +202,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
 
                     let phase = clock.phase(freq, &mut state.last_cycle);
 
-                    let output: SignedUnitInterval = osc.tick(phase, &params.props.kind);
+                    let output = osc.tick(phase, &params.props.kind);
 
                     let output = match modulation {
                         OscMod::AM(m) => am(output, m),
@@ -225,7 +222,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
                         match params.props.output {
                             OscOutput::Direct => OscMod::Direct(output),
                             OscOutput::FMNext => OscMod::FM(output),
-                            OscOutput::AMNext => OscMod::AM(output.remap_into_unsigned()),
+                            OscOutput::AMNext => OscMod::AM(output),
                             OscOutput::RMNext => OscMod::RM(output),
                         },
                         mix,

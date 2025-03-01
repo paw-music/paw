@@ -14,10 +14,10 @@ pub fn fm(freq: f32, m: f32) -> f32 {
     freq * m.exp2()
 }
 
-pub fn am(output: SignedUnitInterval, m: UnitInterval) -> SignedUnitInterval {
-    output * m.inner().powf(f32::consts::E)
+pub fn am(output: f32, m: f32) -> f32 {
+    output * m.powf(f32::consts::E)
 }
 
-pub fn rm(output: SignedUnitInterval, m: SignedUnitInterval) -> SignedUnitInterval {
-    output * m.inner()
+pub fn rm(output: f32, m: f32) -> f32 {
+    output * m
 }
