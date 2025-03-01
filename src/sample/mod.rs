@@ -1,9 +1,12 @@
-use crate::param::f32::SignedUnitInterval;
+use crate::param::f32::{SignedUnitInterval, UnitInterval};
 use core::{
     iter::Sum,
-    ops::{Add, Sub},
+    ops::{Add, Div, Mul, Sub},
 };
 
+pub use frame::Frame;
+
+pub mod frame;
 pub mod time;
 
 pub trait Sample: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> + Sized + Sum {
@@ -91,6 +94,36 @@ impl Sample for f32 {
 
     fn max(self, other: Self) -> Self {
         f32::max(self, other)
+    }
+
+    fn fold_mean(self, prev_mean: Self, index: usize) -> Self {
+        prev_mean + (self - prev_mean) / (index as f32 + 1.0)
+    }
+}
+
+impl Sample for SignedUnitInterval {
+    fn lerp(self, to: Self, num: u32, denom: u32) -> Self {
+        Self::new(self.inner().lerp(to.inner(), num, denom))
+    }
+
+    fn saturating_add(self, other: Self) -> Self {
+        Self::new(self.inner().saturating_add(other.inner()))
+    }
+
+    fn to_sui(self) -> SignedUnitInterval {
+        self
+    }
+
+    fn zero() -> Self {
+        Self::EQUILIBRIUM
+    }
+
+    fn amp(self, amp: f32) -> Self {
+        self * amp
+    }
+
+    fn max(self, other: Self) -> Self {
+        Self::new(self.inner().max(other.inner()))
     }
 
     fn fold_mean(self, prev_mean: Self, index: usize) -> Self {

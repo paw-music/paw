@@ -15,8 +15,9 @@
     "nannou",
     "nanos",
     "oscs",
+    "signum",
     "trunc",
     "Wavetable"
   ],
-  "rust-analyzer.check.allTargets": true
+  "rust-analyzer.check.allTargets": false
 }

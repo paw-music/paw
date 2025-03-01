@@ -7,6 +7,8 @@ use crate::{
     },
 };
 
+use super::mod_pack::ModTarget;
+
 // TODO: LUT?
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -21,7 +23,7 @@ pub enum LfoWaveform {
     ReverseSaw,
 }
 
-// TODO?
+// TODO: Sync
 // pub enum LfoTrigger {
 //     /// LFO restarts on each note
 //     Trigger,
@@ -31,28 +33,41 @@ pub enum LfoWaveform {
 //     Loop,
 // }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LfoTarget {
-    /// Voice level
-    #[default]
-    GlobalLevel,
-    /// Voice pitch
-    GlobalPitch,
-    /// Wavetable position
-    WtPos(usize),
-}
+// #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// pub enum LfoTarget {
+//     /// Voice level
+//     #[default]
+//     GlobalLevel,
+//     /// Voice pitch
+//     GlobalPitch,
+//     /// Wavetable position
+//     WtPos(usize),
+// }
 
 #[derive(Debug, Clone)]
-pub struct LfoParams<const OSCS: usize> {
+pub struct LfoProps {
+    pub index: usize,
     pub enabled: bool,
     pub amount: UnitInterval,
     // TODO: Store sample length instead of frequency
     pub freq: f32,
     pub waveform: LfoWaveform,
-    pub target: LfoTarget,
+    // TODO: Multiple targets?
+    pub target: ModTarget,
 }
 
-impl<const OSCS: usize> LfoParams<OSCS> {
+impl LfoProps {
+    pub fn new(index: usize) -> Self {
+        Self {
+            index,
+            enabled: false,
+            amount: UnitInterval::MAX,
+            freq: 1.0,
+            waveform: LfoWaveform::default(),
+            target: ModTarget::default(),
+        }
+    }
+
     pub fn with_freq(&self, freq: f32) -> Self {
         let mut this = self.clone();
         this.freq = freq;
@@ -60,19 +75,7 @@ impl<const OSCS: usize> LfoParams<OSCS> {
     }
 }
 
-impl<const OSCS: usize> Default for LfoParams<OSCS> {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            amount: UnitInterval::MAX,
-            freq: 1.0,
-            waveform: LfoWaveform::default(),
-            target: LfoTarget::default(),
-        }
-    }
-}
-
-impl<const OSCS: usize> UiComponent for LfoParams<OSCS> {
+impl UiComponent for LfoProps {
     fn ui(
         &mut self,
         ui: &mut impl crate::param::ui::ParamUi,
@@ -81,7 +84,7 @@ impl<const OSCS: usize> UiComponent for LfoParams<OSCS> {
         ui.v_stack(|ui| {
             ui.wave(|x| Lfo::at(x, self));
 
-            ui.checkbox("Lfo enabled", &mut self.enabled);
+            ui.checkbox(&format!("LFO{} enabled", self.index), &mut self.enabled);
 
             if !self.enabled {
                 return;
@@ -107,33 +110,36 @@ impl<const OSCS: usize> UiComponent for LfoParams<OSCS> {
                 ui.unit_interval("Pulse width", pulse_width);
             }
 
-            ui.select(
-                "Target",
-                &mut self.target,
-                [
-                    ("Pitch", LfoTarget::GlobalPitch),
-                    ("Level", LfoTarget::GlobalLevel),
-                ]
-                .into_iter()
-                .chain(
-                    (0..OSCS).map(|osc_index| ("Wavetable position", LfoTarget::WtPos(osc_index))),
-                ),
-            );
+            // TODO
+            // ui.select(
+            //     "Target",
+            //     &mut self.target,
+            //     [
+            //         ("Pitch", ModTarget::GlobalPitch),
+            //         ("Level", ModTarget::GlobalLevel),
+            //     ]
+            //     .into_iter()
+            //     .chain(
+            //         (0..OSCS)
+            //             .map(|osc_index| ("Wavetable position", ModTarget::OscWtPos(osc_index))),
+            //     ),
+            // );
         });
     }
 }
 
 // TODO: Delay and rise
 // TODO: Set freq by rate (1/4, 1/2, etc.). Need synth BPM for that
-pub struct Lfo<const OSCS: usize> {
+pub struct Lfo {
     state: bool,
     // phase: f32,
     last_cycle: u32,
     // TODO: Start phase?
 }
 
-impl<const OSCS: usize> MidiEventListener for Lfo<OSCS> {
+impl MidiEventListener for Lfo {
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
+        let _ = clock;
         let _ = velocity;
         let _ = note;
         // self.phase = 0.0;
@@ -142,6 +148,7 @@ impl<const OSCS: usize> MidiEventListener for Lfo<OSCS> {
     }
 
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
+        let _ = clock;
         let _ = velocity;
         let _ = note;
         // self.phase = 0.0;
@@ -149,7 +156,7 @@ impl<const OSCS: usize> MidiEventListener for Lfo<OSCS> {
     }
 }
 
-impl<const OSCS: usize> Lfo<OSCS> {
+impl Lfo {
     pub fn new() -> Self {
         Self {
             // phase: 0.0,
@@ -158,7 +165,7 @@ impl<const OSCS: usize> Lfo<OSCS> {
         }
     }
 
-    pub fn at(phase: f32, params: &LfoParams<OSCS>) -> f32 {
+    pub fn at(phase: f32, params: &LfoProps) -> f32 {
         match params.waveform {
             LfoWaveform::Pulse(pulse_width) => {
                 // let pulse_width = ;
@@ -175,35 +182,30 @@ impl<const OSCS: usize> Lfo<OSCS> {
         }
     }
 
-    pub fn tick(&mut self, clock: &Clock, params: &LfoParams<OSCS>) -> SignedUnitInterval {
+    pub fn tick(&mut self, clock: &Clock, params: &LfoProps) -> Option<SignedUnitInterval> {
         if !params.enabled {
-            return SignedUnitInterval::EQUILIBRIUM;
+            return None;
         }
-
-        // let length = SAMPLE_RATE as f32 / params.freq.to_num::<f32>();
-        // let length = length.max(1.0);
-
-        // let phase = self.index as f32 / SAMPLE_RATE as f32;
 
         let phase = clock.phase(params.freq, &mut self.last_cycle);
 
+        // Continue one cycle of LFO even if it is not triggered to avoid clicking. So here we stop non-triggered LFO only when phase is zero, i.e. the cycle is complete
         if !self.state && phase == 0.0 {
-            return SignedUnitInterval::EQUILIBRIUM;
+            return None;
         }
 
-        let value = Self::at(phase, params);
+        let value = Self::at(phase, params) * params.amount.inner();
+        let value = SignedUnitInterval::new_checked(value);
 
-        // self.index = (self.index + 1) % length as usize;
-
-        SignedUnitInterval::new_checked(value * params.amount.inner())
+        Some(value)
     }
 }
 
-pub struct LfoPack<const SIZE: usize, const OSCS: usize> {
-    lfos: [Lfo<OSCS>; SIZE],
+pub struct LfoPack<const SIZE: usize> {
+    lfos: [Lfo; SIZE],
 }
 
-impl<const SIZE: usize, const OSCS: usize> MidiEventListener for LfoPack<SIZE, OSCS> {
+impl<const SIZE: usize> MidiEventListener for LfoPack<SIZE> {
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.lfos
             .iter_mut()
@@ -217,27 +219,18 @@ impl<const SIZE: usize, const OSCS: usize> MidiEventListener for LfoPack<SIZE, O
     }
 }
 
-impl<const SIZE: usize, const OSCS: usize> LfoPack<SIZE, OSCS> {
+impl<const SIZE: usize> LfoPack<SIZE> {
     pub fn new() -> Self {
         Self {
             lfos: core::array::from_fn(|_| Lfo::new()),
         }
     }
 
-    // pub fn tick<'a>(&mut self, params: impl Iterator<Item = &'a LfoParams<SAMPLE_RATE>>) -> f32 {
-    //     self.lfos
-    //         .iter_mut()
-    //         .zip(params)
-    //         .map(|(lfo, params)| lfo.tick(params))
-    //         .sum::<f32>()
-    //         / self.lfos.len() as f32
-    // }
-
     pub fn tick(
         &mut self,
         clock: &Clock,
-        target: LfoTarget,
-        params: &[LfoParams<OSCS>],
+        target: ModTarget,
+        params: &[LfoProps],
     ) -> Option<SignedUnitInterval> {
         debug_assert_eq!(params.len(), self.lfos.len());
 
@@ -248,7 +241,7 @@ impl<const SIZE: usize, const OSCS: usize> LfoPack<SIZE, OSCS> {
             .zip(self.lfos.iter_mut())
             .filter_map(|(params, lfo)| {
                 if params.target == target {
-                    Some(lfo.tick(clock, params))
+                    lfo.tick(clock, params)
                 } else {
                     None
                 }

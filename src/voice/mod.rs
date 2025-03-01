@@ -1,30 +1,30 @@
 use crate::{
-    components::{
-        env::{EnvPack, EnvParams, EnvTarget},
-        lfo::{LfoPack, LfoParams, LfoTarget},
-    },
     midi::event::MidiEventListener,
-    osc::{clock::Clock, Osc, OscPack, OscProps},
+    modulation::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack},
+    osc::{clock::Clock, Osc, OscPack, OscParams, OscProps},
     param::f32::{SignedUnitInterval, UnitInterval},
-    value::freq::modulate_freq,
+    sample::Frame,
 };
 
 pub mod controller;
 
-#[derive(Clone, Copy)]
+// TODO: Non-static osc props
 pub struct VoiceParams<'a, O: Osc, const OSCS: usize> {
-    pub osc_props: &'a [OscProps<'static, O>],
-    pub env_params: &'a [EnvParams<OSCS>],
-    pub lfo_params: &'a [LfoParams<OSCS>],
+    pub osc_params: [OscParams<'static, O, OSCS>; OSCS],
+    pub env_params: &'a [EnvProps],
+    pub lfo_params: &'a [LfoProps],
+    pub amp_mod: Option<UnitInterval>,
 }
+
+// FIXME: Env changes how FM sounds with two oscs
 
 pub struct Voice<O: Osc, const LFOS: usize, const ENVS: usize, const OSCS: usize> {
     oscs: OscPack<O, OSCS>,
     root_freq: f32,
     detune: SignedUnitInterval,
     blend: UnitInterval,
-    envs: EnvPack<ENVS>,
-    lfos: LfoPack<LFOS, OSCS>,
+    stereo_balance: UnitInterval,
+    mods: ModPack<LFOS, ENVS, OSCS>,
     velocity: UnitInterval,
 }
 
@@ -35,15 +35,14 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize> 
         self.root_freq = note.freq();
         self.velocity = velocity;
 
-        // self.oscs.note_on(self.root_freq);
-        self.envs.note_on(clock, note, velocity);
-        self.lfos.note_on(clock, note, velocity);
+        self.mods.note_on(clock, note, velocity);
+        self.oscs.note_on(clock, note, velocity);
     }
 
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.velocity = UnitInterval::MIN;
-        self.envs.note_off(clock, note, velocity);
-        self.lfos.note_off(clock, note, velocity);
+        self.mods.note_off(clock, note, velocity);
+        self.oscs.note_off(clock, note, velocity);
     }
 }
 
@@ -56,8 +55,8 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
             root_freq: 0.0,
             detune: SignedUnitInterval::EQUILIBRIUM,
             blend: UnitInterval::MAX,
-            envs: EnvPack::new(),
-            lfos: LfoPack::new(),
+            stereo_balance: UnitInterval::EQUILIBRIUM,
+            mods: ModPack::new(),
             velocity: UnitInterval::MIN,
         }
     }
@@ -67,41 +66,27 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
         self.detune = detune;
     }
 
-    pub fn tick<'a>(
-        &mut self,
-        clock: &Clock,
-        params: &VoiceParams<'a, O, OSCS>,
-    ) -> Option<SignedUnitInterval> {
-        let pitch_mod = self
-            .envs
-            .tick(clock, EnvTarget::SynthPitch, &params.env_params)
-            .map(|pitch_mod| pitch_mod.remap_into_signed())
-            .or_else(|| {
-                self.lfos
-                    .tick(clock, LfoTarget::GlobalPitch, params.lfo_params)
-            })
-            .unwrap_or(SignedUnitInterval::EQUILIBRIUM);
+    pub fn set_stereo_balance(&mut self, stereo_balance: UnitInterval) {
+        self.stereo_balance = stereo_balance;
+    }
 
-        // FIXME: Should be clamped by SignedUnitInterval or can exceed [-1.0; 1.0] range?
-        let pitch_mod = pitch_mod.inner() + self.detune.inner();
+    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
+        let freq = fm(self.root_freq, self.detune.inner());
+        // TODO: use `am`?
+        // TODO: Should blend and velocity be passed to osc or is it a post-modulation?
+        let amp = self.blend
+            * if let Some(amp_mod) = params.amp_mod {
+                amp_mod
+            } else {
+                self.velocity
+            };
 
-        let freq = modulate_freq(self.root_freq, pitch_mod);
+        let sample = self
+            .oscs
+            .tick(clock, freq, &params.osc_params)
+            .map(|sample| sample * amp);
 
-        let amp_mod = self
-            .envs
-            .tick(clock, EnvTarget::SynthLevel, &params.env_params)
-            .or_else(|| {
-                self.lfos
-                    .tick(clock, LfoTarget::GlobalLevel, params.lfo_params)
-                    .map(|amp_mod| amp_mod.remap_into_unsigned() * self.velocity)
-            })
-            .unwrap_or(self.velocity);
-
-        let amp = self.blend * amp_mod;
-
-        self.oscs
-            .tick(clock, freq, params.osc_props)
-            .map(|sample| sample * amp)
+        sample.map(|sample| Frame::equal(sample).balanced(self.stereo_balance))
     }
 }
 

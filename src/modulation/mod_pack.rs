@@ -1,0 +1,105 @@
+use core::fmt::Display;
+
+use super::{
+    env::{EnvPack, EnvProps},
+    lfo::{LfoPack, LfoProps},
+};
+use crate::{
+    midi::event::MidiEventListener,
+    osc::clock::Clock,
+    param::f32::{SignedUnitInterval, UnitInterval},
+};
+
+// #[derive(Debug, Clone, Copy)]
+// pub enum ModSource {
+//     Lfo(usize),
+//     Env(usize),
+// }
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ModTarget {
+    // Global modulations //
+    #[default]
+    GlobalLevel,
+    GlobalPitch,
+
+    // Wavetable modulations //
+    OscWtPos(usize),
+}
+
+impl Display for ModTarget {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ModTarget::GlobalLevel => write!(f, "Synth level"),
+            ModTarget::GlobalPitch => write!(f, "Synth pitch"),
+            // ModTarget::OscPitch(osc) => write!(f, "OSC{osc} pitch"),
+            // ModTarget::OscLevel(osc) => write!(f, "OSC{osc} level"),
+            ModTarget::OscWtPos(osc) => write!(f, "OSC{osc} WT position"),
+        }
+    }
+}
+
+impl ModTarget {
+    pub fn each<const OSCS: usize>() -> impl Iterator<Item = Self> {
+        [Self::GlobalLevel, Self::GlobalPitch]
+            .into_iter()
+            // .chain((0..OSCS).map(|osc| Self::OscPitch(osc)))
+            // .chain((0..OSCS).map(|osc| Self::OscLevel(osc)))
+            .chain((0..OSCS).map(|osc| Self::OscWtPos(osc)))
+    }
+}
+
+pub struct ModPack<const LFOS: usize, const ENVS: usize, const OSCS: usize> {
+    lfos: LfoPack<LFOS>,
+    envs: EnvPack<ENVS>,
+}
+
+impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> MidiEventListener
+    for ModPack<LFOS, ENVS, OSCS>
+{
+    fn note_on(
+        &mut self,
+        clock: &crate::osc::clock::Clock,
+        note: crate::midi::note::Note,
+        velocity: crate::param::f32::UnitInterval,
+    ) {
+        self.lfos.note_on(clock, note, velocity);
+        self.envs.note_on(clock, note, velocity);
+    }
+
+    fn note_off(
+        &mut self,
+        clock: &crate::osc::clock::Clock,
+        note: crate::midi::note::Note,
+        velocity: crate::param::f32::UnitInterval,
+    ) {
+        self.lfos.note_off(clock, note, velocity);
+        self.envs.note_off(clock, note, velocity);
+    }
+}
+
+impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> ModPack<LFOS, ENVS, OSCS> {
+    pub fn new() -> Self {
+        Self {
+            lfos: LfoPack::new(),
+            envs: EnvPack::new(),
+        }
+    }
+
+    pub fn tick(
+        &mut self,
+        clock: &Clock,
+        target: ModTarget,
+        lfo_props: &[LfoProps],
+        env_props: &[EnvProps],
+    ) -> Option<SignedUnitInterval> {
+        self.lfos
+            .tick(clock, target, lfo_props)
+            .map(|lfo_mod| lfo_mod.into())
+            .or_else(|| {
+                self.envs
+                    .tick(clock, target, env_props)
+                    .map(|env_mod| env_mod.remap_into_signed())
+            })
+    }
+}

@@ -1,3 +1,4 @@
+use super::mod_pack::ModTarget;
 use crate::{
     midi::event::MidiEventListener,
     osc::clock::Clock,
@@ -5,19 +6,20 @@ use crate::{
     sample::time::SampleCount,
 };
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EnvTarget {
-    #[default]
-    SynthLevel,
-    SynthPitch,
-    WtPos(usize),
-}
+// #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// pub enum EnvTarget {
+//     #[default]
+//     SynthLevel,
+//     SynthPitch,
+//     WtPos(usize),
+// }
 
 #[derive(Debug)]
-pub struct EnvParams<const OSCS: usize> {
+pub struct EnvProps {
+    pub index: usize,
     pub enabled: bool,
     pub amount: UnitInterval,
-    pub target: EnvTarget,
+    pub target: ModTarget,
 
     // Stages //
     pub delay: SampleCount,
@@ -28,10 +30,10 @@ pub struct EnvParams<const OSCS: usize> {
     pub release: SampleCount,
 }
 
-impl<const OSCS: usize> UiComponent for EnvParams<OSCS> {
+impl UiComponent for EnvProps {
     fn ui(&mut self, ui: &mut impl crate::param::ui::ParamUi, params: &crate::param::ui::UiParams) {
         ui.v_stack(|ui| {
-            ui.checkbox("Env enabled", &mut self.enabled);
+            ui.checkbox(&format!("Env{} enabled", self.index), &mut self.enabled);
 
             if !self.enabled {
                 return;
@@ -54,23 +56,24 @@ impl<const OSCS: usize> UiComponent for EnvParams<OSCS> {
                 &params.clock,
             );
 
-            ui.select(
-                "Target",
-                &mut self.target,
-                [
-                    ("Pitch", EnvTarget::SynthPitch),
-                    ("Level", EnvTarget::SynthLevel),
-                ]
-                .into_iter()
-                .chain(
-                    (0..OSCS).map(|osc_index| ("Wavetable position", EnvTarget::WtPos(osc_index))),
-                ),
-            );
+            // TODO
+            // ui.select(
+            //     "Target",
+            //     &mut self.target,
+            //     [
+            //         ("Pitch", EnvTarget::SynthPitch),
+            //         ("Level", EnvTarget::SynthLevel),
+            //     ]
+            //     .into_iter()
+            //     .chain(
+            //         (0..OSCS).map(|osc_index| ("Wavetable position", EnvTarget::WtPos(osc_index))),
+            //     ),
+            // );
         });
     }
 }
 
-impl<const OSCS: usize> EnvParams<OSCS> {
+impl EnvProps {
     // fn before_sustain(&self, position: u32) -> Option<f32> {
     //     [(self.delay, 0.0), (self.attack, ), self.hold, self.decay]
     //         .iter()
@@ -87,11 +90,12 @@ impl<const OSCS: usize> EnvParams<OSCS> {
     //         .err()
     // }
 
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new(index: usize, sample_rate: u32) -> Self {
         Self {
+            index,
             enabled: false,
             amount: UnitInterval::MAX,
-            target: EnvTarget::default(),
+            target: Default::default(),
             delay: SampleCount::zero(),
             attack: SampleCount::from_millis(1, sample_rate),
             hold: SampleCount::zero(),
@@ -102,7 +106,7 @@ impl<const OSCS: usize> EnvParams<OSCS> {
     }
 
     fn attack_endpoint(&self, velocity: f32) -> f32 {
-        if self.decay.is_zero() {
+        if !self.decay.is_zero() {
             velocity
         } else {
             self.sustain.inner()
@@ -190,11 +194,11 @@ impl Env {
         }
     }
 
-    pub fn tick<const OSCS: usize>(
-        &mut self,
-        clock: &Clock,
-        params: &EnvParams<OSCS>,
-    ) -> Option<UnitInterval> {
+    pub fn tick(&mut self, clock: &Clock, params: &EnvProps) -> Option<UnitInterval> {
+        if !params.enabled {
+            return None;
+        }
+
         match self.state {
             EnvState::Idle => None,
             EnvState::NoteOn { velocity, at_tick } => {
@@ -238,11 +242,11 @@ impl<const SIZE: usize> EnvPack<SIZE> {
         }
     }
 
-    pub fn tick<const OSCS: usize>(
+    pub fn tick(
         &mut self,
         clock: &Clock,
-        target: EnvTarget,
-        params: &[EnvParams<OSCS>],
+        target: ModTarget,
+        params: &[EnvProps],
     ) -> Option<UnitInterval> {
         debug_assert_eq!(params.len(), self.envs.len());
 
@@ -251,7 +255,7 @@ impl<const SIZE: usize> EnvPack<SIZE> {
             .zip(self.envs.iter_mut())
             .filter_map(|(params, env)| {
                 if params.target == target {
-                    Some(env.tick(clock, params).unwrap_or(UnitInterval::MIN))
+                    env.tick(clock, params)
                 } else {
                     None
                 }

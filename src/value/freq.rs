@@ -84,9 +84,3 @@
 //     #[test]
 //     fn freq_conv() {}
 // }
-
-use num_traits::Float;
-
-pub fn modulate_freq(freq: f32, m: f32) -> f32 {
-    freq + freq * 2.0.powf(m)
-}

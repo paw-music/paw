@@ -1,7 +1,7 @@
 use core::{
     fmt::Display,
     iter::Sum,
-    ops::{Add, Div, Mul, RangeInclusive},
+    ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -104,6 +104,26 @@ impl PartialEq<f32> for HalfUnitInterval {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SignedUnitInterval(f32);
 
+impl Neg for SignedUnitInterval {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self::new(self.inner().neg())
+    }
+}
+
+impl PartialOrd<f32> for SignedUnitInterval {
+    fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
+        self.inner().partial_cmp(other)
+    }
+}
+
+impl PartialEq<f32> for SignedUnitInterval {
+    fn eq(&self, other: &f32) -> bool {
+        self.inner().eq(other)
+    }
+}
+
 impl Display for SignedUnitInterval {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.inner().fmt(f)
@@ -153,6 +173,14 @@ impl Add for SignedUnitInterval {
 
     fn add(self, rhs: Self) -> Self::Output {
         Self::new(self.0 + rhs.0)
+    }
+}
+
+impl Sub for SignedUnitInterval {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(self.0 - rhs.0)
     }
 }
 

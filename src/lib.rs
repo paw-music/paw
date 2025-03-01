@@ -9,13 +9,16 @@ extern crate num_derive;
 #[macro_use]
 extern crate alloc;
 
-pub mod components;
 pub mod ctx;
 pub mod macros;
 pub mod midi;
+pub mod modulation;
 pub mod osc;
 pub mod param;
 pub mod sample;
 pub mod value;
 pub mod voice;
 pub mod wavetable;
+pub mod fx;
+pub mod buffer;
+pub mod synth;

@@ -2,12 +2,15 @@ use nannou::prelude::*;
 use nannou_audio::{self as audio, Buffer};
 use nannou_egui::Egui;
 use paw::{
+    fx::delay::{Delay, DelayParams},
     midi::{event::MidiEventListener as _, note::Note},
+    modulation::mod_pack::ModTarget,
     osc::clock::Clock,
     param::{
         f32::UnitInterval,
         ui::{UiComponent, UiParams},
     },
+    sample::time::SampleCount,
     wavetable::{synth::WtSynth, Wavetable, WavetableRow},
 };
 use std::sync::{Arc, LazyLock, Mutex};
@@ -19,6 +22,7 @@ const SAMPLE_RATE: u32 = 44_100;
 const VOICES: usize = 8;
 const LFOS: usize = 2;
 const ENVS: usize = 2;
+const OSCS: usize = 2;
 
 type GlobalWavetable = LazyLock<Wavetable<WAVETABLE_DEPTH, WAVETABLE_LENGTH>>;
 
@@ -134,7 +138,7 @@ static BASIC_WAVES_TABLE: GlobalWavetable = GlobalWavetable::new(|| {
 });
 
 struct Synth {
-    synth: WtSynth<WAVETABLE_DEPTH, WAVETABLE_LENGTH, VOICES, LFOS, ENVS>,
+    synth: WtSynth<WAVETABLE_DEPTH, WAVETABLE_LENGTH, VOICES, LFOS, ENVS, OSCS>,
 }
 
 // impl Synth {
@@ -181,6 +185,7 @@ fn model(app: &App) -> Model {
     let window_id = app
         .new_window()
         .view(view)
+        .size(1280, 720)
         .raw_event(raw_window_event)
         .event(event)
         .title("SANDBOX")
@@ -321,6 +326,36 @@ fn update(_app: &App, model: &mut Model, update: Update) {
                     clock: synth.clock(),
                 },
             );
+
+            // Mod matrix //
+            ui.vertical(|ui| {
+                synth
+                    .env_props_mut()
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(env_id, env)| {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("ENV {env_id}"));
+                            ModTarget::each::<OSCS>().for_each(|target| {
+                                ui.radio_value(&mut env.target, target, target.to_string());
+                            });
+                        });
+                    });
+
+                synth
+                    .lfo_props_mut()
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(lfo_id, lfo)| {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("LFO {lfo_id}"));
+
+                            ModTarget::each::<OSCS>().for_each(|target| {
+                                ui.radio_value(&mut lfo.target, target, target.to_string());
+                            });
+                        });
+                    });
+            });
         });
 }
 
@@ -342,9 +377,9 @@ fn audio(audio: &mut AudioModel, buffer: &mut Buffer) {
         //     *channel = sine_amp * volume;
         // }
 
-        let sample = synth.tick().unwrap();
-        for channel in frame {
-            *channel = sample.inner();
+        let output = synth.tick().unwrap();
+        for (channel, output) in frame.iter_mut().zip(output) {
+            *channel = output.inner();
         }
     }
 }

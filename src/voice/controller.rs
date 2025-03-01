@@ -1,12 +1,30 @@
 use super::{Voice, VoiceParams};
 use crate::{
     midi::{event::MidiEventListener, note::Note},
-    osc::{clock::Clock, Osc},
+    osc::{clock::Clock, Osc, OscProps},
     param::{
         f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
         ui::UiComponent,
     },
+    sample::Frame,
 };
+
+// TODO: We can do const expressions for voice count! [Optimization]
+/// Compute general even "spread" of voices, used for detune and stereo spread
+/// Accepts function mapping offset from center to output value.
+pub fn voices_spread<T>(count: usize, f: impl Fn(f32) -> T) -> impl Iterator<Item = T> {
+    let half_voices = count as f32 / 2.0;
+
+    (0..count).map(move |index| {
+        if half_voices > 0.0 {
+            let center_offset = (index as f32 + 0.5) / half_voices - 1.0;
+
+            f(center_offset)
+        } else {
+            f(0.0)
+        }
+    })
+}
 
 // TODO: Blend mode. Like Center vs Detuned, Linear (more detuned voices blend less)
 /// Distribute detune by voices, returns iterator of (detune factor, voice amp determined by blend)
@@ -16,28 +34,30 @@ pub fn voices_detune(
     detune: UnitInterval,
     blend: HalfUnitInterval,
 ) -> impl Iterator<Item = (SignedUnitInterval, UnitInterval)> {
-    let half_detuned_voices = count as f32 / 2.0;
     let center_area = 1.0 / count as f32;
 
-    (0..count).map(move |index| {
-        if detune > 0.0 && half_detuned_voices > 0.0 {
-            let center_offset = (index as f32 + 0.5) / half_detuned_voices - 1.0;
+    voices_spread(count, move |center_offset| {
+        (
+            SignedUnitInterval::new_checked(center_offset * detune.inner()),
+            // This equation means that centered voices are one or two nearest to center. For odd number of voices, there's a center voice with `center_offset` being 0.0, while for even number of voices there're two with distance dependent on count of voices.
+            UnitInterval::new_checked(
+                if center_offset.abs() - center_area <= f32::EPSILON {
+                    1.0 - blend.inner()
+                } else {
+                    blend.inner()
+                }
+                .sqrt(),
+            ),
+        )
+    })
+}
 
-            (
-                SignedUnitInterval::new_checked(center_offset * detune.inner()),
-                // This equation means that centered voices are one or two nearest to center. For odd number of voices, there's a center voice with `center_offset` being 0.0, while for even number of voices there're two with distance dependent on count of voices.
-                UnitInterval::new_checked(
-                    if center_offset.abs() - center_area <= f32::EPSILON {
-                        1.0 - blend.inner()
-                    } else {
-                        blend.inner()
-                    }
-                    .sqrt(),
-                ),
-            )
-        } else {
-            (SignedUnitInterval::EQUILIBRIUM, UnitInterval::MAX)
-        }
+pub fn voices_stereo_spread(
+    count: usize,
+    amount: UnitInterval,
+) -> impl Iterator<Item = UnitInterval> {
+    voices_spread(count, move |center_offset| {
+        (SignedUnitInterval::new_checked(center_offset) * amount).remap_into_unsigned()
     })
 }
 
@@ -54,7 +74,6 @@ struct MonoVoice {
     note: Option<Note>,
 }
 
-// TODO: Maybe we should merge `voices_notes` and place them separately
 /// The polyphony mode
 #[derive(Clone)]
 enum Polyphony<const MAX_VOICES: usize> {
@@ -75,6 +94,9 @@ enum Polyphony<const MAX_VOICES: usize> {
 
         /// Amount of blend between less and more detuned voices where 0.0 is no detuned voices at all and 0.5 is the maximum value where detuned voices and center voice are equal in amplification
         blend: HalfUnitInterval,
+
+        /// Voices stereo spread
+        stereo_spread: UnitInterval,
     },
 }
 
@@ -144,6 +166,7 @@ impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OS
                             unison: 1,
                             detune: UnitInterval::EQUILIBRIUM,
                             blend: HalfUnitInterval::MAX,
+                            stereo_spread: UnitInterval::EQUILIBRIUM,
                         },
                     ),
                 ]
@@ -154,11 +177,12 @@ impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OS
                 unison,
                 detune,
                 blend,
+                stereo_spread,
             } = &mut self.polyphony
             {
                 ui.lines(
                     voices_detune(*unison, *detune, *blend).map(|(detune, blend)| {
-                        let x = 1.0 - detune.inner();
+                        let x = detune.inner();
                         // let is_center = detune == 1.0;
 
                         ((x, 1.0), (x, -blend.inner()))
@@ -168,6 +192,7 @@ impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OS
                 ui.count("Unison", unison, (1, VOICES));
                 ui.unit_interval("Detune", detune);
                 ui.half_unit_interval("Blend", blend);
+                ui.unit_interval("Stereo spread", stereo_spread);
             }
         });
     }
@@ -194,8 +219,9 @@ impl<
                                  note: Note,
                                  velocity: UnitInterval,
                                  detune: SignedUnitInterval,
-                                 blend: UnitInterval| {
-            // FIXME: Voice amp is not right for blend, use separate state
+                                 blend: UnitInterval,
+                                 stereo_balance: UnitInterval| {
+            self.voices[index].set_stereo_balance(stereo_balance);
             self.voices[index].set_detune(blend, detune);
             self.voices[index].note_on(clock, note, velocity);
         };
@@ -217,20 +243,18 @@ impl<
                     velocity,
                     SignedUnitInterval::EQUILIBRIUM,
                     UnitInterval::MAX,
+                    UnitInterval::EQUILIBRIUM,
                 );
                 self.voices_notes[index].note = Some(note);
 
                 *last_voice_index = index as u8;
             }
-            Polyphony::Unison {
+            &mut Polyphony::Unison {
                 unison,
                 detune,
                 blend,
+                stereo_spread,
             } => {
-                let unison = *unison;
-                let detune = *detune;
-                let blend = *blend;
-
                 // TODO: NotePriority
                 if self
                     .voices_notes
@@ -253,11 +277,23 @@ impl<
                         }
                     })
                     .take(unison)
-                    .zip(voices_detune(unison, detune, blend))
-                    .for_each(|((voice_index, voice), (detune, blend))| {
-                        note_on_voice(voice_index, note, velocity, detune, blend);
-                        voice.note = Some(note);
-                    });
+                    .zip(
+                        voices_detune(unison, detune, blend)
+                            .zip(voices_stereo_spread(unison, stereo_spread)),
+                    )
+                    .for_each(
+                        |((voice_index, voice), ((detune, blend), stereo_balance))| {
+                            note_on_voice(
+                                voice_index,
+                                note,
+                                velocity,
+                                detune,
+                                blend,
+                                stereo_balance,
+                            );
+                            voice.note = Some(note);
+                        },
+                    );
             }
         }
     }
@@ -295,27 +331,27 @@ impl<
         }
     }
 
-    pub fn voice_n(&self, index: usize) -> &Voice<O, LFOS, ENVS, OSCS> {
-        &self.voices[index]
-    }
+    // pub fn voice_n(&self, index: usize) -> &Voice<O, LFOS, ENVS, OSCS> {
+    //     &self.voices[index]
+    // }
 
-    pub fn voices_detune(
-        &self,
-    ) -> Option<impl Iterator<Item = (SignedUnitInterval, UnitInterval)>> {
-        match &self.polyphony {
-            Polyphony::Poly { .. } => None,
-            &Polyphony::Unison {
-                unison,
-                detune,
-                blend,
-                ..
-            } => Some(voices_detune(unison, detune, blend)),
-        }
-    }
+    // pub fn voices_detune(
+    //     &self,
+    // ) -> Option<impl Iterator<Item = (SignedUnitInterval, UnitInterval)>> {
+    //     match &self.polyphony {
+    //         Polyphony::Poly { .. } => None,
+    //         &Polyphony::Unison {
+    //             unison,
+    //             detune,
+    //             blend,
+    //             ..
+    //         } => Some(voices_detune(unison, detune, blend)),
+    //     }
+    // }
 
-    pub fn iter_voices_mut(&mut self) -> impl Iterator<Item = &mut Voice<O, LFOS, ENVS, OSCS>> {
-        self.voices.iter_mut()
-    }
+    // pub fn iter_voices_mut(&mut self) -> impl Iterator<Item = &mut Voice<O, LFOS, ENVS, OSCS>> {
+    //     self.voices.iter_mut()
+    // }
 
     pub fn has_note(&self, note: Note) -> bool {
         self.voices_notes
@@ -334,17 +370,13 @@ impl<
     //         })
     // }
 
-    pub fn tick<'a>(
-        &mut self,
-        clock: &Clock,
-        voice_params: &VoiceParams<'a, O, OSCS>,
-    ) -> Option<SignedUnitInterval> {
+    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
         let sample = (0..VOICES)
             .map(|index| {
                 self.voices[index]
-                    .tick(clock, voice_params)
-                    .map(|sample| sample / VOICES as f32)
-                    .unwrap_or(SignedUnitInterval::EQUILIBRIUM)
+                    .tick(clock, params)
+                    .map(|frame| frame.map(|sample| *sample / VOICES as f32))
+                    .unwrap_or(Frame::zero())
             })
             .sum();
 
