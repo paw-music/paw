@@ -1,9 +1,5 @@
-use super::{Wavetable, WavetableProps};
-use crate::{
-    osc::Osc,
-    param::{f32::SignedUnitInterval, ui::UiComponent},
-    sample::Sample,
-};
+use super::WavetableProps;
+use crate::{osc::Osc, sample::Sample};
 
 // TODO: The open question is if depth can possibly be non-global for voices such that some modulation controls spread of the depths.
 // TODO: Per-voice depth so different unison voices can play different WT?

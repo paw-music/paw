@@ -1,7 +1,7 @@
-use crate::param::f32::{SignedUnitInterval, UnitInterval};
+use crate::param::f32::SignedUnitInterval;
 use core::{
     iter::Sum,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Sub},
 };
 
 pub use frame::Frame;

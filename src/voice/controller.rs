@@ -1,11 +1,9 @@
 use super::{Voice, VoiceParams};
 use crate::{
+    macros::debug_assert_unit,
     midi::{event::MidiEventListener, note::Note},
-    osc::{clock::Clock, Osc, OscProps},
-    param::{
-        f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
-        ui::UiComponent,
-    },
+    osc::{clock::Clock, Osc},
+    param::f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
     sample::Frame,
 };
 
@@ -57,7 +55,7 @@ pub fn voices_stereo_spread(
     amount: UnitInterval,
 ) -> impl Iterator<Item = UnitInterval> {
     voices_spread(count, move |center_offset| {
-        (SignedUnitInterval::new_checked(center_offset) * amount).remap_into_unsigned()
+        (SignedUnitInterval::new_checked(center_offset) * amount).remap_into_ui()
     })
 }
 
@@ -140,37 +138,29 @@ pub struct VoicesController<
     polyphony: Polyphony<VOICES>,
 }
 
+#[cfg(feature = "egui")]
 impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OSCS: usize>
-    UiComponent for VoicesController<O, VOICES, LFOS, ENVS, OSCS>
+    crate::param::ui::EguiComponent for VoicesController<O, VOICES, LFOS, ENVS, OSCS>
 {
-    fn ui(
-        &mut self,
-        ui: &mut impl crate::param::ui::ParamUi,
-        _ui_params: &crate::param::ui::UiParams,
-    ) {
-        ui.v_stack(|ui| {
-            // TODO: Move from/to polyphony state
-            ui.select(
-                "Polyphony",
+    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+        ui.vertical(|ui| {
+            // TODO: Move to Polyphony::egui method
+            ui.radio_value(
                 &mut self.polyphony,
-                [
-                    (
-                        "Poly",
-                        Polyphony::Poly {
-                            last_voice_index: 0,
-                        },
-                    ),
-                    (
-                        "Unison",
-                        Polyphony::Unison {
-                            unison: 1,
-                            detune: UnitInterval::EQUILIBRIUM,
-                            blend: HalfUnitInterval::MAX,
-                            stereo_spread: UnitInterval::EQUILIBRIUM,
-                        },
-                    ),
-                ]
-                .into_iter(),
+                Polyphony::Poly {
+                    last_voice_index: 0,
+                },
+                "Poly",
+            );
+            ui.radio_value(
+                &mut self.polyphony,
+                Polyphony::Unison {
+                    unison: 1,
+                    detune: UnitInterval::EQUILIBRIUM,
+                    blend: HalfUnitInterval::MAX,
+                    stereo_spread: UnitInterval::EQUILIBRIUM,
+                },
+                "Unison",
             );
 
             if let Polyphony::Unison {
@@ -180,19 +170,58 @@ impl<O: Osc, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OS
                 stereo_spread,
             } = &mut self.polyphony
             {
-                ui.lines(
-                    voices_detune(*unison, *detune, *blend).map(|(detune, blend)| {
-                        let x = detune.inner();
-                        // let is_center = detune == 1.0;
+                egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                    ui.ctx().request_repaint();
 
-                        ((x, 1.0), (x, -blend.inner()))
-                    }),
+                    let (_id, rect) = ui.allocate_space(egui::vec2(150.0, 100.0));
+
+                    ui.painter().with_clip_rect(rect).extend(
+                        voices_detune(*unison, *detune, *blend)
+                            .map(|(detune, blend)| {
+                                let x = detune.inner();
+                                // let is_center = detune == 1.0;
+
+                                ((x, 1.0), (x, -blend.inner()))
+                            })
+                            .map(|((x1, y1), (x2, y2))| {
+                                debug_assert_unit!(x1, y1, x2, y2);
+
+                                egui::Shape::line_segment(
+                                    [
+                                        rect.min
+                                            + egui::pos2(
+                                                (x1 + 1.0) * rect.width() / 2.0,
+                                                (y1 + 1.0) * rect.height() / 2.0,
+                                            )
+                                            .to_vec2(),
+                                        rect.min
+                                            + egui::pos2(
+                                                (x2 + 1.0) * rect.width() / 2.0,
+                                                (y2 + 1.0) * rect.height() / 2.0,
+                                            )
+                                            .to_vec2(),
+                                    ],
+                                    egui::Stroke::new(1.0, egui::Color32::from_gray(255)),
+                                )
+                            }),
+                    );
+                });
+
+                ui.add(
+                    egui::Slider::from_get_set(1.0..=VOICES as f64, |new_value| {
+                        if let Some(new_value) = new_value {
+                            *unison = new_value as usize;
+                        }
+
+                        *unison as f64
+                    })
+                    .integer()
+                    .text("Unison"),
                 );
 
-                ui.count("Unison", unison, (1, VOICES));
-                ui.unit_interval("Detune", detune);
-                ui.half_unit_interval("Blend", blend);
-                ui.unit_interval("Stereo spread", stereo_spread);
+                ui.add(detune.widget().text("Detune"));
+                ui.add(blend.widget().text("Blend"));
+                ui.add(stereo_spread.widget().text("Stereo"));
             }
         });
     }
@@ -370,7 +399,7 @@ impl<
     //         })
     // }
 
-    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
+    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Frame {
         let sample = (0..VOICES)
             .map(|index| {
                 self.voices[index]
@@ -380,6 +409,6 @@ impl<
             })
             .sum();
 
-        Some(sample)
+        sample
     }
 }

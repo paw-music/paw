@@ -1,6 +1,5 @@
-use core::ops::{Add, Mul};
-
 use crate::osc::clock::Clock;
+use core::ops::{Add, Mul};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SampleCount(u32);
@@ -86,6 +85,47 @@ impl SampleCount {
 
     pub const fn is_zero(&self) -> bool {
         self.inner() == 0
+    }
+
+    #[cfg(feature = "egui")]
+    pub fn widget<'a>(
+        &'a mut self,
+        clock: Clock,
+        clamp: Option<(SampleCount, SampleCount)>,
+    ) -> egui::Slider<'a> {
+        let range = clamp
+            .map(|clamp| clamp.0.inner() as f64..=clamp.1.inner() as f64)
+            .unwrap_or_else(|| {
+                // Default range for sample count is from 0 to 10 seconds
+                0.0..=clock.sample_rate as f64 * 10.0
+            });
+
+        // TODO: Do we need logarithmic parameter?
+        let logarithmic = range.end() - range.start() >= 1_000.0;
+
+        egui::Slider::from_get_set(range, |new_value| {
+            if let Some(new_value) = new_value {
+                *self = SampleCount::new(new_value as u32);
+            }
+
+            self.inner() as f64
+        })
+        .integer()
+        .logarithmic(logarithmic)
+        .custom_formatter(move |value, _| {
+            let value = value as u32;
+            let millis = value * 1_000 / clock.sample_rate;
+
+            if value == 0 {
+                format!("0")
+            } else if millis == 0 {
+                format!("{}t", value)
+            } else if value < clock.sample_rate {
+                format!("{}ms", millis)
+            } else {
+                format!("{}s", value / clock.sample_rate)
+            }
+        })
     }
 }
 

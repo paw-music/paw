@@ -1,17 +1,14 @@
 use crate::{
     midi::event::MidiEventListener,
-    modulation::{am, fm, rm, Modulate},
-    param::{
-        f32::{SignedUnitInterval, UnitInterval},
-        ui::UiComponent,
-    },
+    modulation::{am, fm, rm, ModValue, Modulate},
+    param::f32::UnitInterval,
 };
-use clock::Clock;
+use clock::{Clock, Freq};
 
 pub mod clock;
 
-pub trait Osc: Sized + Default {
-    type Props<'a>: Copy + Modulate;
+pub trait Osc: Sized + Default + Send {
+    type Props<'a>: Copy + Modulate + Send;
 
     fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> f32;
 }
@@ -47,11 +44,63 @@ pub struct OscProps<'a, O: Osc, const OSCS: usize> {
     tune_cents: i8,
 }
 
+#[cfg(feature = "egui")]
+impl<'a, O: Osc, const OSCS: usize> crate::param::ui::EguiComponent for OscProps<'a, O, OSCS> {
+    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+        ui.checkbox(&mut self.enabled, &format!("OSC{} enabled", self.index));
+
+        if !self.enabled {
+            return;
+        }
+
+        // self.kind.
+
+        let next_osc = self.index + 1;
+        if OSCS > next_osc {
+            ui.radio_value(&mut self.output, OscOutput::Direct, "Direct output");
+            ui.radio_value(
+                &mut self.output,
+                OscOutput::AMNext,
+                format!("OSC{next_osc} AM"),
+            );
+            ui.radio_value(
+                &mut self.output,
+                OscOutput::FMNext,
+                format!("OSC{next_osc} FM"),
+            );
+            ui.radio_value(
+                &mut self.output,
+                OscOutput::RMNext,
+                format!("OSC{next_osc} RM"),
+            );
+        }
+
+        ui.add(
+            egui::Slider::from_get_set(-36.0..=36.0, |new_value| {
+                if let Some(new_value) = new_value {
+                    self.tune_semitones = new_value as i8;
+                }
+
+                self.tune_semitones as f64
+            })
+            .text("Tune semi"),
+        );
+
+        ui.add(
+            egui::Slider::from_get_set(-50.0..=50.0, |new_value| {
+                if let Some(new_value) = new_value {
+                    self.tune_cents = new_value as i8;
+                }
+
+                self.tune_cents as f64
+            })
+            .text("Tune cents"),
+        );
+    }
+}
+
 impl<'a, O: Osc, const OSCS: usize> Modulate for OscProps<'a, O, OSCS> {
-    fn modulated(
-        &self,
-        f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<SignedUnitInterval>,
-    ) -> Self {
+    fn modulated(&self, f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue) -> Self {
         Self {
             kind: self.kind.modulated(f),
             ..*self
@@ -72,64 +121,14 @@ impl<'a, O: Osc, const OSCS: usize> OscProps<'a, O, OSCS> {
     }
 }
 
-impl<'a, O: Osc, const OSCS: usize> UiComponent for OscProps<'a, O, OSCS>
-where
-    O::Props<'a>: UiComponent,
-{
-    fn ui(
-        &mut self,
-        ui: &mut impl crate::param::ui::ParamUi,
-        ui_params: &crate::param::ui::UiParams,
-    ) {
-        ui.checkbox(&format!("OSC{} enabled", self.index), &mut self.enabled);
-
-        if !self.enabled {
-            return;
-        }
-
-        self.kind.ui(ui, ui_params);
-
-        let next_osc = self.index + 1;
-        if OSCS > next_osc {
-            ui.select(
-                &format!("OSC{} routing", self.index),
-                &mut self.output,
-                [
-                    ("Direct output", OscOutput::Direct),
-                    (format!("OSC{next_osc} AM").as_str(), OscOutput::AMNext),
-                    (format!("OSC{next_osc} FM").as_str(), OscOutput::FMNext),
-                    (format!("OSC{next_osc} RM").as_str(), OscOutput::RMNext),
-                ]
-                .into_iter(),
-            );
-        }
-
-        ui.int_map("Tune semitones", (-36, 36), |new_value| {
-            if let Some(new_value) = new_value {
-                self.tune_semitones = new_value;
-            }
-
-            self.tune_semitones
-        });
-
-        ui.int_map("Tune cents", (-50, 50), |new_value| {
-            if let Some(new_value) = new_value {
-                self.tune_cents = new_value;
-            }
-
-            self.tune_cents
-        });
-    }
-}
-
 pub struct OscParams<'a, O: Osc, const OSCS: usize> {
     pub props: OscProps<'a, O, OSCS>,
-    pub pitch_mod: SignedUnitInterval,
+    pub pitch_mod: ModValue,
 }
 
 impl<'a, O: Osc, const OSCS: usize> OscParams<'a, O, OSCS> {
     fn tune_mod(&self) -> f32 {
-        self.pitch_mod.inner()
+        self.pitch_mod.as_sui().inner()
             + self.props.tune_semitones as f32 / 12.0
             + self.props.tune_cents as f32 / 1200.0
     }
@@ -178,7 +177,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
     pub fn tick<'a>(
         &mut self,
         clock: &Clock,
-        freq: f32,
+        freq: Freq,
         params: &[OscParams<'a, O, OSCS>],
     ) -> Option<f32> {
         let (_, output) = self

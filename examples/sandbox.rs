@@ -2,29 +2,12 @@ use nannou::prelude::*;
 use nannou_audio::{self as audio, Buffer};
 use nannou_egui::Egui;
 use paw::{
-    fx::delay::{Delay, DelayParams},
-    midi::{event::MidiEventListener as _, note::Note},
-    modulation::mod_pack::ModTarget,
-    osc::clock::Clock,
-    param::{
-        f32::UnitInterval,
-        ui::{UiComponent, UiParams},
-    },
-    sample::time::SampleCount,
-    wavetable::{synth::WtSynth, Wavetable, WavetableRow},
+    midi::note::Note,
+    param::{f32::UnitInterval, ui::EguiComponent as _},
 };
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 
-type Sample = f32;
-const WAVETABLE_DEPTH: usize = 4;
-const WAVETABLE_LENGTH: usize = 1024;
-const SAMPLE_RATE: u32 = 44_100;
-const VOICES: usize = 8;
-const LFOS: usize = 2;
-const ENVS: usize = 2;
-const OSCS: usize = 2;
-
-type GlobalWavetable = LazyLock<Wavetable<WAVETABLE_DEPTH, WAVETABLE_LENGTH>>;
+type Daw = paw::daw::Daw<8, 8, 4>;
 
 fn note_from_nannou_key(key: nannou::event::Key) -> Result<Note, ()> {
     match key {
@@ -124,23 +107,6 @@ fn key_id_from_nannou_key(key: nannou::event::Key) -> Result<u8, ()> {
     }
 }
 
-static BASIC_WAVES_TABLE: GlobalWavetable = GlobalWavetable::new(|| {
-    Wavetable::from_rows([
-        // Sine
-        WavetableRow::new(|phase| (TAU * phase).sin()),
-        // Square
-        WavetableRow::new(|phase| if phase < 0.5 { 1.0 } else { -1.0 }),
-        // Triangle
-        WavetableRow::new(|phase| 2.0 * (2.0 * (phase - (phase + 0.5).floor())).abs() - 1.0),
-        // Saw
-        WavetableRow::new(|phase| 2.0 * (phase - (phase + 0.5).floor())),
-    ])
-});
-
-struct Synth {
-    synth: WtSynth<WAVETABLE_DEPTH, WAVETABLE_LENGTH, VOICES, LFOS, ENVS, OSCS>,
-}
-
 // impl Synth {
 //     pub fn has_note(&self, note: Note) -> bool {
 //         self.notes
@@ -175,7 +141,7 @@ struct Model {
     // Note: Need to store stream even unused for audio to play.
     stream: audio::Stream<AudioModel>,
     octave: u8,
-    synth: Arc<Mutex<Synth>>,
+    daw: Arc<Mutex<Daw>>,
     egui: Egui,
     /// Mapping from pressed key (identified by key id from `key_id_from_nannou_key`) to played note. This is needed when user presses a key, changes octave (or transposes) but keeps key pressed, and to "note off" this note when key is released, not to lose actual note transposition.
     pressed_keys_notes: Vec<Option<Note>>,
@@ -196,13 +162,11 @@ fn model(app: &App) -> Model {
 
     let audio_host = audio::Host::new();
 
-    let synth = Synth {
-        synth: WtSynth::new(SAMPLE_RATE, &BASIC_WAVES_TABLE),
-    };
-    let synth = Arc::new(Mutex::new(synth));
+    let daw = Daw::new();
+    let daw = Arc::new(Mutex::new(daw));
 
     let audio_model = AudioModel {
-        synth: Arc::clone(&synth),
+        daw: Arc::clone(&daw),
     };
 
     let stream = audio_host
@@ -221,14 +185,14 @@ fn model(app: &App) -> Model {
     Model {
         stream,
         octave: 0,
-        synth,
+        daw,
         egui,
         pressed_keys_notes: vec![None; 128],
     }
 }
 
 fn event(_app: &App, model: &mut Model, event: WindowEvent) {
-    let synth = &mut model.synth.lock().unwrap().synth;
+    let daw = &mut model.daw.lock().unwrap();
 
     match event {
         KeyPressed(key) => {
@@ -250,7 +214,7 @@ fn event(_app: &App, model: &mut Model, event: WindowEvent) {
                     return;
                 }
 
-                synth.note_on(&synth.clock(), note, UnitInterval::MAX);
+                daw.note_on(note, UnitInterval::MAX);
 
                 assert!(model.pressed_keys_notes[key_id].replace(note).is_none());
             } else {
@@ -266,11 +230,10 @@ fn event(_app: &App, model: &mut Model, event: WindowEvent) {
                 if let Some(prev_note) =
                     model.pressed_keys_notes[key_id_from_nannou_key(key).unwrap() as usize].take()
                 {
-                    synth.note_off(&synth.clock(), prev_note, UnitInterval::MAX);
+                    daw.note_off(prev_note, UnitInterval::MAX);
                 }
 
-                synth.note_off(
-                    &synth.clock(),
+                daw.note_off(
                     note.saturating_add(model.octave as i16 * 12),
                     UnitInterval::MIN,
                 );
@@ -315,58 +278,60 @@ fn update(_app: &App, model: &mut Model, update: Update) {
     egui.set_elapsed_time(update.since_start);
     let ctx = egui.begin_frame();
 
-    let synth = &mut model.synth.lock().unwrap().synth;
+    let daw = &mut model.daw.lock().unwrap();
 
-    nannou_egui::egui::Window::new("Synth")
-        .fixed_size((250.0, 500.0))
+    nannou_egui::egui::Window::new("DAW")
+        .auto_sized()
         .show(&ctx, |ui| {
-            synth.ui(
-                ui,
-                &UiParams {
-                    clock: synth.clock(),
-                },
-            );
+            // synth.ui(
+            //     ui,
+            //     &UiParams {
+            //         clock: synth.clock(),
+            //     },
+            // );
 
-            // Mod matrix //
-            ui.vertical(|ui| {
-                synth
-                    .env_props_mut()
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(env_id, env)| {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("ENV {env_id}"));
-                            ModTarget::each::<OSCS>().for_each(|target| {
-                                ui.radio_value(&mut env.target, target, target.to_string());
-                            });
-                        });
-                    });
+            daw.egui(ui, ());
 
-                synth
-                    .lfo_props_mut()
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(lfo_id, lfo)| {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("LFO {lfo_id}"));
+            // // Mod matrix //
+            // ui.vertical(|ui| {
+            //     synth
+            //         .env_props_mut()
+            //         .iter_mut()
+            //         .enumerate()
+            //         .for_each(|(env_id, env)| {
+            //             ui.horizontal(|ui| {
+            //                 ui.label(format!("ENV {env_id}"));
+            //                 ModTarget::each::<OSCS>().for_each(|target| {
+            //                     ui.radio_value(&mut env.target, target, target.to_string());
+            //                 });
+            //             });
+            //         });
 
-                            ModTarget::each::<OSCS>().for_each(|target| {
-                                ui.radio_value(&mut lfo.target, target, target.to_string());
-                            });
-                        });
-                    });
-            });
+            //     synth
+            //         .lfo_props_mut()
+            //         .iter_mut()
+            //         .enumerate()
+            //         .for_each(|(lfo_id, lfo)| {
+            //             ui.horizontal(|ui| {
+            //                 ui.label(format!("LFO {lfo_id}"));
+
+            //                 ModTarget::each::<OSCS>().for_each(|target| {
+            //                     ui.radio_value(&mut lfo.target, target, target.to_string());
+            //                 });
+            //             });
+            //         });
+            // });
         });
 }
 
 struct AudioModel {
-    synth: Arc<Mutex<Synth>>,
+    daw: Arc<Mutex<Daw>>,
 }
 
 fn audio(audio: &mut AudioModel, buffer: &mut Buffer) {
-    assert_eq!(buffer.sample_rate(), SAMPLE_RATE);
+    let daw = &mut audio.daw.lock().unwrap();
 
-    let synth = &mut audio.synth.lock().unwrap().synth;
+    assert_eq!(buffer.sample_rate(), daw.clock().sample_rate);
 
     // let volume = 0.5;
     for frame in buffer.frames_mut() {
@@ -377,9 +342,9 @@ fn audio(audio: &mut AudioModel, buffer: &mut Buffer) {
         //     *channel = sine_amp * volume;
         // }
 
-        let output = synth.tick().unwrap();
+        let output = daw.tick_internal();
         for (channel, output) in frame.iter_mut().zip(output) {
-            *channel = output.inner();
+            *channel = output;
         }
     }
 }

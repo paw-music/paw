@@ -1,7 +1,8 @@
 use crate::{
+    daw::channel_rack::Instrument,
+    midi::event::MidiEventListener,
     modulation::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
     osc::{clock::Clock, Osc, OscParams, OscProps},
-    param::f32::SignedUnitInterval,
     sample::Frame,
     voice::{controller::VoicesController, Voice, VoiceParams},
 };
@@ -9,9 +10,9 @@ use crate::{
 pub struct Synth<
     O: Osc,
     const VOICES: usize,
-    const LFOS: usize = 1,
-    const ENVS: usize = 1,
-    const OSCS: usize = 1,
+    const LFOS: usize,
+    const ENVS: usize,
+    const OSCS: usize,
 > {
     lfo_props: [LfoProps; LFOS],
     env_props: [EnvProps; ENVS],
@@ -22,6 +23,78 @@ pub struct Synth<
     osc_props: [OscProps<'static, O, OSCS>; OSCS],
 
     voices: VoicesController<O, VOICES, LFOS, ENVS, OSCS>,
+}
+
+impl<
+        O: Osc + 'static,
+        const VOICES: usize,
+        const LFOS: usize,
+        const ENVS: usize,
+        const OSCS: usize,
+    > Instrument for Synth<O, VOICES, LFOS, ENVS, OSCS>
+{
+    fn tick(&mut self, clock: &Clock) -> Frame {
+        self.tick(clock)
+    }
+
+    fn name(&self) -> &str {
+        "Synth"
+    }
+
+    #[cfg(feature = "egui")]
+    fn egui(&mut self, ui: &mut egui::Ui, params: (Clock,)) {
+        use crate::param::ui::{DefaultUiParams, EguiComponent as _};
+
+        let params = DefaultUiParams { clock: params.0 };
+
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                self.voices.egui(ui, params);
+                self.osc_props
+                    .iter_mut()
+                    .for_each(|props| props.egui(ui, params));
+            });
+
+            ui.horizontal(|ui| {
+                self.lfo_props.iter_mut().for_each(|lfo| {
+                    lfo.egui(ui, params);
+                });
+
+                self.env_props.iter_mut().for_each(|env| {
+                    env.egui(ui, params);
+                });
+            });
+        });
+    }
+}
+
+impl<
+        O: Osc + 'static,
+        const VOICES: usize,
+        const LFOS: usize,
+        const ENVS: usize,
+        const OSCS: usize,
+    > MidiEventListener for Synth<O, VOICES, LFOS, ENVS, OSCS>
+{
+    fn note_on(
+        &mut self,
+        clock: &Clock,
+        note: crate::midi::note::Note,
+        velocity: crate::param::f32::UnitInterval,
+    ) {
+        self.mods.note_on(clock, note, velocity);
+        self.voices.note_on(clock, note, velocity);
+    }
+
+    fn note_off(
+        &mut self,
+        clock: &Clock,
+        note: crate::midi::note::Note,
+        velocity: crate::param::f32::UnitInterval,
+    ) {
+        self.mods.note_off(clock, note, velocity);
+        self.voices.note_off(clock, note, velocity);
+    }
 }
 
 impl<
@@ -42,33 +115,27 @@ impl<
         }
     }
 
-    pub fn tick(&mut self, clock: &Clock) -> Option<Frame> {
+    pub fn tick(&mut self, clock: &Clock) -> Frame {
         // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
         let osc_params = core::array::from_fn(|index| OscParams {
             props: self.osc_props[index].modulated(|target| {
                 self.mods
                     .tick(clock, target, &self.lfo_props, &self.env_props)
             }),
-            pitch_mod: self
-                .mods
-                .tick(
-                    clock,
-                    crate::modulation::mod_pack::ModTarget::GlobalPitch,
-                    &self.lfo_props,
-                    &self.env_props,
-                )
-                .unwrap_or(SignedUnitInterval::EQUILIBRIUM),
-        });
-
-        let amp_mod = self
-            .mods
-            .tick(
+            pitch_mod: self.mods.tick(
                 clock,
-                crate::modulation::mod_pack::ModTarget::GlobalLevel,
+                crate::modulation::mod_pack::ModTarget::GlobalPitch,
                 &self.lfo_props,
                 &self.env_props,
-            )
-            .map(|amp_mod| amp_mod.remap_into_unsigned());
+            ),
+        });
+
+        let amp_mod = self.mods.tick(
+            clock,
+            crate::modulation::mod_pack::ModTarget::GlobalLevel,
+            &self.lfo_props,
+            &self.env_props,
+        );
 
         let frame = self.voices.tick(
             clock,

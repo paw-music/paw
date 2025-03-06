@@ -17,9 +17,9 @@ macro_rules! notes {
 
             // pub fn from_freq(freq)
 
-            pub fn freq(&self) -> f32 {
+            pub fn freq(&self) -> crate::osc::clock::Freq {
                 match self {
-                    $(Self::$name => $freq),*
+                    $(Self::$name => crate::osc::clock::Freq::new($freq)),*
                 }
             }
         }

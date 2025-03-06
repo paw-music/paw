@@ -1,9 +1,9 @@
 use core::{
     iter::Sum,
-    ops::{Add, Div, Index, Mul},
+    ops::{Add, AddAssign, Div, Mul},
 };
 
-use crate::param::f32::{SignedUnitInterval, UnitInterval};
+use crate::param::f32::UnitInterval;
 
 use super::Sample;
 
@@ -48,7 +48,7 @@ impl<T> Frame<T, 2> {
 }
 
 impl Frame<f32, 2> {
-    pub fn balanced(&self, balance: UnitInterval) -> Self {
+    pub fn stereo_balanced(&self, balance: UnitInterval) -> Self {
         Self {
             channels: [
                 self.channels[0] * (1.0 - balance.inner()),
@@ -99,6 +99,15 @@ impl<T: Add<Output = T> + Copy, const SIZE: usize> Add for Frame<T, SIZE> {
 
     fn add(self, rhs: Self) -> Self::Output {
         self.zip(rhs, |lhs, rhs| *lhs + *rhs)
+    }
+}
+
+impl<T: Add<Output = T> + Copy, const SIZE: usize> AddAssign for Frame<T, SIZE> {
+    fn add_assign(&mut self, rhs: Self) {
+        self.channels
+            .iter_mut()
+            .zip(rhs.channels)
+            .for_each(|(this, rhs)| *this = *this + rhs);
     }
 }
 

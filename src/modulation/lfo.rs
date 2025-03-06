@@ -1,10 +1,7 @@
 use crate::{
     midi::event::MidiEventListener,
-    osc::clock::Clock,
-    param::{
-        f32::{SignedUnitInterval, UnitInterval},
-        ui::UiComponent,
-    },
+    osc::clock::{Clock, Freq},
+    param::f32::{SignedUnitInterval, UnitInterval},
 };
 
 use super::mod_pack::ModTarget;
@@ -50,64 +47,44 @@ pub struct LfoProps {
     pub enabled: bool,
     pub amount: UnitInterval,
     // TODO: Store sample length instead of frequency
-    pub freq: f32,
+    pub freq: Freq,
     pub waveform: LfoWaveform,
     // TODO: Multiple targets?
     pub target: ModTarget,
 }
 
-impl LfoProps {
-    pub fn new(index: usize) -> Self {
-        Self {
-            index,
-            enabled: false,
-            amount: UnitInterval::MAX,
-            freq: 1.0,
-            waveform: LfoWaveform::default(),
-            target: ModTarget::default(),
-        }
-    }
+#[cfg(feature = "egui")]
+impl crate::param::ui::EguiComponent for LfoProps {
+    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+        ui.vertical(|ui| {
+            crate::param::ui::egui_wave(ui, |x| Lfo::at(x, &self));
 
-    pub fn with_freq(&self, freq: f32) -> Self {
-        let mut this = self.clone();
-        this.freq = freq;
-        this
-    }
-}
-
-impl UiComponent for LfoProps {
-    fn ui(
-        &mut self,
-        ui: &mut impl crate::param::ui::ParamUi,
-        _ui_params: &crate::param::ui::UiParams,
-    ) {
-        ui.v_stack(|ui| {
-            ui.wave(|x| Lfo::at(x, self));
-
-            ui.checkbox(&format!("LFO{} enabled", self.index), &mut self.enabled);
+            ui.checkbox(&mut self.enabled, &format!("LFO{} enabled", self.index));
 
             if !self.enabled {
                 return;
             }
 
-            ui.unit_interval("Amount", &mut self.amount);
-            ui.freq("Frequency", &mut self.freq, Some((0.01, 10.0)));
-            ui.select(
-                "Waveform",
-                &mut self.waveform,
-                [
-                    // TODO: Preserve pulse width
-                    ("Pulse", LfoWaveform::Pulse(UnitInterval::EQUILIBRIUM)),
-                    ("Sine", LfoWaveform::Sine),
-                    ("Triangle", LfoWaveform::Triangle),
-                    ("Saw", LfoWaveform::Saw),
-                    ("Reverse saw", LfoWaveform::ReverseSaw),
-                ]
-                .into_iter(),
+            ui.add(self.amount.widget().text("Amonut"));
+            ui.add(
+                self.freq
+                    .widget(Some(Freq::mHz(1)..=Freq::Hz(20)))
+                    .logarithmic(true)
+                    .text("Freq"),
             );
 
+            ui.radio_value(
+                &mut self.waveform,
+                LfoWaveform::Pulse(UnitInterval::EQUILIBRIUM),
+                "Pulse",
+            );
+            ui.radio_value(&mut self.waveform, LfoWaveform::Sine, "Sine");
+            ui.radio_value(&mut self.waveform, LfoWaveform::Triangle, "Triangle");
+            ui.radio_value(&mut self.waveform, LfoWaveform::Saw, "Saw");
+            ui.radio_value(&mut self.waveform, LfoWaveform::ReverseSaw, "Reverse saw");
+
             if let LfoWaveform::Pulse(pulse_width) = &mut self.waveform {
-                ui.unit_interval("Pulse width", pulse_width);
+                ui.add(pulse_width.widget().text("Pulse width"));
             }
 
             // TODO
@@ -126,6 +103,25 @@ impl UiComponent for LfoProps {
             // );
         });
     }
+}
+
+impl LfoProps {
+    pub fn new(index: usize) -> Self {
+        Self {
+            index,
+            enabled: false,
+            amount: UnitInterval::MAX,
+            freq: Freq::HZ,
+            waveform: LfoWaveform::default(),
+            target: ModTarget::default(),
+        }
+    }
+
+    // pub fn with_freq(&self, freq: Freq) -> Self {
+    //     let mut this = self.clone();
+    //     this.freq = freq;
+    //     this
+    // }
 }
 
 // TODO: Delay and rise

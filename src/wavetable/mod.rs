@@ -1,10 +1,11 @@
 use crate::{
-    modulation::Modulate,
-    param::{f32::SignedUnitInterval, ui::UiComponent},
+    modulation::{ModValue, Modulate},
+    param::f32::SignedUnitInterval,
     sample::Sample,
 };
 
 pub mod osc;
+pub mod synth;
 
 #[derive(Debug)]
 pub struct WavetableRow<const LENGTH: usize> {
@@ -80,12 +81,13 @@ pub struct WavetableProps<'a, const DEPTH: usize, const LENGTH: usize> {
 impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a, DEPTH, LENGTH> {
     fn modulated(
         &self,
-        mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<SignedUnitInterval>,
+        mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue,
     ) -> Self {
-        let depth_offset = f(crate::modulation::mod_pack::ModTarget::OscWtPos(
-            self.osc_index,
-        ))
-        .unwrap_or(self.depth_offset);
+        let depth_offset = self.depth_offset
+            + f(crate::modulation::mod_pack::ModTarget::OscWtPos(
+                self.osc_index,
+            ))
+            .as_sui();
 
         Self {
             depth_offset,
@@ -94,23 +96,22 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a
     }
 }
 
-impl<'a, const DEPTH: usize, const LENGTH: usize> UiComponent
+#[cfg(feature = "egui")]
+impl<'a, const DEPTH: usize, const LENGTH: usize> crate::param::ui::EguiComponent
     for WavetableProps<'a, DEPTH, LENGTH>
 {
-    fn ui(
-        &mut self,
-        ui: &mut impl crate::param::ui::ParamUi,
-        _params: &crate::param::ui::UiParams,
-    ) {
-        ui.wave(|x| self.lerp(x));
+    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+        crate::param::ui::egui_wave(ui, |x| self.lerp(x));
 
-        ui.int_map("Depth", (0, DEPTH - 1), |new_depth| {
-            if let Some(new_depth) = new_depth {
-                self.depth = new_depth
-            }
-
-            self.depth
-        });
+        ui.add(
+            egui::Slider::from_get_set(0.0..=DEPTH as f64 - 1.0, |new_value| {
+                if let Some(new_value) = new_value {
+                    self.depth = new_value as usize;
+                }
+                self.depth as f64
+            })
+            .text("Depth"),
+        );
     }
 }
 

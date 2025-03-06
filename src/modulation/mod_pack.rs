@@ -3,11 +3,11 @@ use core::fmt::Display;
 use super::{
     env::{EnvPack, EnvProps},
     lfo::{LfoPack, LfoProps},
+    ModValue,
 };
 use crate::{
     midi::event::MidiEventListener,
     osc::clock::Clock,
-    param::f32::{SignedUnitInterval, UnitInterval},
 };
 
 // #[derive(Debug, Clone, Copy)]
@@ -92,14 +92,15 @@ impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> ModPack<LFOS, ENVS
         target: ModTarget,
         lfo_props: &[LfoProps],
         env_props: &[EnvProps],
-    ) -> Option<SignedUnitInterval> {
+    ) -> ModValue {
         self.lfos
             .tick(clock, target, lfo_props)
-            .map(|lfo_mod| lfo_mod.into())
+            .map(|lfo_mod| ModValue::Lfo(lfo_mod))
             .or_else(|| {
                 self.envs
                     .tick(clock, target, env_props)
-                    .map(|env_mod| env_mod.remap_into_signed())
+                    .map(|env_mod| ModValue::Env(env_mod))
             })
+            .unwrap_or_default()
     }
 }

@@ -1,8 +1,6 @@
 use super::mod_pack::ModTarget;
 use crate::{
-    midi::event::MidiEventListener,
-    osc::clock::Clock,
-    param::{f32::UnitInterval, ui::UiComponent},
+    midi::event::MidiEventListener, osc::clock::Clock, param::f32::UnitInterval,
     sample::time::SampleCount,
 };
 
@@ -30,31 +28,29 @@ pub struct EnvProps {
     pub release: SampleCount,
 }
 
-impl UiComponent for EnvProps {
-    fn ui(&mut self, ui: &mut impl crate::param::ui::ParamUi, params: &crate::param::ui::UiParams) {
-        ui.v_stack(|ui| {
-            ui.checkbox(&format!("Env{} enabled", self.index), &mut self.enabled);
+#[cfg(feature = "egui")]
+impl crate::param::ui::EguiComponent for EnvProps {
+    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+        let clock = params.clock;
+
+        ui.vertical(|ui| {
+            ui.checkbox(&mut self.enabled, &format!("Env{} enabled", self.index));
 
             if !self.enabled {
                 return;
             }
 
             let time_clamp = (
-                SampleCount::from_millis(1, params.clock.sample_rate),
-                SampleCount::from_seconds(10, params.clock.sample_rate),
+                SampleCount::from_millis(1, clock.sample_rate),
+                SampleCount::from_seconds(10, clock.sample_rate),
             );
 
-            ui.sample_count("Delay", &mut self.delay, Some(time_clamp), &params.clock);
-            ui.sample_count("Attack", &mut self.attack, Some(time_clamp), &params.clock);
-            ui.sample_count("Hold", &mut self.hold, Some(time_clamp), &params.clock);
-            ui.sample_count("Decay", &mut self.decay, Some(time_clamp), &params.clock);
-            ui.unit_interval("Sustain", &mut self.sustain);
-            ui.sample_count(
-                "Release",
-                &mut self.release,
-                Some(time_clamp),
-                &params.clock,
-            );
+            ui.add(self.delay.widget(clock, Some(time_clamp)).text("Delay"));
+            ui.add(self.attack.widget(clock, Some(time_clamp)).text("Attack"));
+            ui.add(self.hold.widget(clock, Some(time_clamp)).text("Hold"));
+            ui.add(self.decay.widget(clock, Some(time_clamp)).text("Decay"));
+            ui.add(self.sustain.widget().text("Sustain"));
+            ui.add(self.release.widget(clock, Some(time_clamp)).text("Release"));
 
             // TODO
             // ui.select(

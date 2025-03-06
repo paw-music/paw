@@ -1,7 +1,10 @@
 use crate::{
     midi::event::MidiEventListener,
-    modulation::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack},
-    osc::{clock::Clock, Osc, OscPack, OscParams, OscProps},
+    modulation::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack, ModValue},
+    osc::{
+        clock::{Clock, Freq},
+        Osc, OscPack, OscParams,
+    },
     param::f32::{SignedUnitInterval, UnitInterval},
     sample::Frame,
 };
@@ -13,14 +16,14 @@ pub struct VoiceParams<'a, O: Osc, const OSCS: usize> {
     pub osc_params: [OscParams<'static, O, OSCS>; OSCS],
     pub env_params: &'a [EnvProps],
     pub lfo_params: &'a [LfoProps],
-    pub amp_mod: Option<UnitInterval>,
+    pub amp_mod: ModValue,
 }
 
 // FIXME: Env changes how FM sounds with two oscs
 
 pub struct Voice<O: Osc, const LFOS: usize, const ENVS: usize, const OSCS: usize> {
     oscs: OscPack<O, OSCS>,
-    root_freq: f32,
+    root_freq: Freq,
     detune: SignedUnitInterval,
     blend: UnitInterval,
     stereo_balance: UnitInterval,
@@ -52,7 +55,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
     pub fn new(osc: impl Fn(usize) -> O) -> Self {
         Self {
             oscs: OscPack::new(osc),
-            root_freq: 0.0,
+            root_freq: Freq::ZERO,
             detune: SignedUnitInterval::EQUILIBRIUM,
             blend: UnitInterval::MAX,
             stereo_balance: UnitInterval::EQUILIBRIUM,
@@ -72,13 +75,18 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
 
     pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
         let freq = fm(self.root_freq, self.detune.inner());
-        // TODO: use `am`?
+
         // TODO: Should blend and velocity be passed to osc or is it a post-modulation?
+
         let amp = self.blend
-            * if let Some(amp_mod) = params.amp_mod {
-                amp_mod
-            } else {
-                self.velocity
+            * match params.amp_mod {
+                // Use raw velocity without modulation
+                ModValue::None => self.velocity,
+                // Envelope depends on velocity (attack goes to velocity), so env is just setting the amp.
+                ModValue::Env(env) => env,
+                // TODO: use `am` instead of mul?
+                // Lfo modulates amp with max of given velocity
+                ModValue::Lfo(lfo) => lfo.remap_into_ui() * self.velocity,
             };
 
         let sample = self
@@ -86,7 +94,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
             .tick(clock, freq, &params.osc_params)
             .map(|sample| sample * amp.inner());
 
-        sample.map(|sample| Frame::equal(sample).balanced(self.stereo_balance))
+        sample.map(|sample| Frame::equal(sample).stereo_balanced(self.stereo_balance))
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    param::f32::{SignedUnitInterval, UnitInterval},
+    param::f32::UnitInterval,
     sample::Frame,
 };
 

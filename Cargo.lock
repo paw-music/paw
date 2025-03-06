@@ -2253,6 +2253,7 @@ dependencies = [
  "egui",
  "fixed",
  "fugit",
+ "lazy_static",
  "nannou",
  "nannou_audio",
  "nannou_egui",

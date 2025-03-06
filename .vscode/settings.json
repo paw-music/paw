@@ -19,5 +19,7 @@
     "trunc",
     "Wavetable"
   ],
-  "rust-analyzer.check.allTargets": false
+  "rust-analyzer.check.allTargets": false,
+  "rust-analyzer.cargo.features": ["egui"],
+  "rust-analyzer.cargo.noDefaultFeatures": true
 }

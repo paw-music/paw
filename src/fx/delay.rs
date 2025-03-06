@@ -1,7 +1,7 @@
 use super::filter::one_pole::OnePole;
 use crate::{
     osc::clock::Clock,
-    param::f32::{SignedUnitInterval, UnitInterval},
+    param::f32::UnitInterval,
     sample::{time::SampleCount, Frame},
 };
 

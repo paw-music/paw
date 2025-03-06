@@ -4,6 +4,8 @@ use core::{
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
+// TODO: Rename mod to `interval`
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UnitInterval(f32);
 
@@ -43,6 +45,17 @@ impl UnitInterval {
 
     pub fn remap_into_signed(&self) -> SignedUnitInterval {
         SignedUnitInterval::new(self.0 * 2.0 - 1.0)
+    }
+
+    #[cfg(feature = "egui")]
+    pub fn widget(&mut self) -> egui::Slider {
+        egui::Slider::from_get_set(0.0..=1.0, |new_value| {
+            if let Some(new_value) = new_value {
+                *self = UnitInterval::new_checked(new_value as f32);
+            }
+
+            self.inner() as f64
+        })
     }
 }
 
@@ -86,6 +99,17 @@ impl HalfUnitInterval {
     #[inline]
     pub fn inner(&self) -> f32 {
         self.0
+    }
+
+    #[cfg(feature = "egui")]
+    pub fn widget(&mut self) -> egui::Slider {
+        egui::Slider::from_get_set(0.0..=0.5, |new_value| {
+            if let Some(new_value) = new_value {
+                *self = HalfUnitInterval::new(new_value as f32);
+            }
+
+            self.inner() as f64
+        })
     }
 }
 
@@ -205,7 +229,7 @@ impl SignedUnitInterval {
         self.0
     }
 
-    pub fn remap_into_unsigned(&self) -> UnitInterval {
+    pub fn remap_into_ui(&self) -> UnitInterval {
         UnitInterval::new((self.0 + 1.0) / 2.0)
     }
 }
@@ -233,18 +257,12 @@ mod tests {
             SignedUnitInterval::EQUILIBRIUM
         );
 
-        assert_eq!(
-            SignedUnitInterval::MIN.remap_into_unsigned(),
-            UnitInterval::MIN,
-        );
+        assert_eq!(SignedUnitInterval::MIN.remap_into_ui(), UnitInterval::MIN,);
+
+        assert_eq!(SignedUnitInterval::MAX.remap_into_ui(), UnitInterval::MAX,);
 
         assert_eq!(
-            SignedUnitInterval::MAX.remap_into_unsigned(),
-            UnitInterval::MAX,
-        );
-
-        assert_eq!(
-            SignedUnitInterval::EQUILIBRIUM.remap_into_unsigned(),
+            SignedUnitInterval::EQUILIBRIUM.remap_into_ui(),
             UnitInterval::EQUILIBRIUM,
         );
     }
