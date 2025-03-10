@@ -88,7 +88,7 @@ impl<const SIZE: usize> UnmixedOutput<SIZE> {
     }
 }
 
-pub(super) struct MixerTrack<const FX_SLOTS: usize> {
+pub struct MixerTrack<const FX_SLOTS: usize> {
     // TODO: Disable fx
     // TODO: Mute
     // TODO: Panning
@@ -138,6 +138,10 @@ impl<const FX_SLOTS: usize> MixerTrack<FX_SLOTS> {
             level: UnitInterval::MAX,
             effects: [const { None }; FX_SLOTS],
         }
+    }
+
+    pub fn level_mut(&mut self) -> &mut UnitInterval {
+        &mut self.level
     }
 
     pub fn iter_effects_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Fx>> {
@@ -197,6 +201,10 @@ impl<const SIZE: usize, const FX_SLOTS: usize> Mixer<SIZE, FX_SLOTS> {
         Self {
             tracks: [const { MixerTrack::new() }; SIZE],
         }
+    }
+
+    pub fn iter_tracks_mut(&mut self) -> impl Iterator<Item = &mut MixerTrack<FX_SLOTS>> {
+        self.tracks.iter_mut()
     }
 
     pub fn mix(&mut self, clock: &Clock, input: UnmixedOutput<SIZE>) -> Frame {

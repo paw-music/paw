@@ -84,6 +84,10 @@ impl Channel {
         }
     }
 
+    pub fn instrument_mut(&mut self) -> &mut dyn Instrument {
+        self.instrument.as_mut()
+    }
+
     pub fn tick(&mut self, clock: &Clock) -> TrackOutput {
         TrackOutput::new(self.mixer_track, self.instrument.tick(clock))
     }
