@@ -3,6 +3,7 @@ use crate::{
     osc::clock::{Clock, Freq},
     param::f32::{SignedUnitInterval, UnitInterval},
 };
+use micromath::F32Ext as _;
 
 use super::mod_pack::ModTarget;
 

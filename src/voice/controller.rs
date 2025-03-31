@@ -6,6 +6,7 @@ use crate::{
     param::f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
     sample::Frame,
 };
+use micromath::F32Ext as _;
 
 // TODO: We can do const expressions for voice count! [Optimization]
 /// Compute general even "spread" of voices, used for detune and stereo spread

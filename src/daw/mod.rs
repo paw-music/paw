@@ -5,8 +5,6 @@ use mixer::Mixer;
 pub mod channel_rack;
 pub mod mixer;
 
-const DEFAULT_SAMPLE_RATE: u32 = 44_100;
-
 pub enum ClockSource {
     Internal,
     External(u32),
@@ -80,11 +78,11 @@ impl<const CHANNEL_RACK_SIZE: usize, const MIXER_SIZE: usize, const FX_SLOTS: us
 impl<const CHANNEL_RACK_SIZE: usize, const MIXER_SIZE: usize, const FX_SLOTS: usize>
     Daw<CHANNEL_RACK_SIZE, MIXER_SIZE, FX_SLOTS>
 {
-    pub fn new() -> Self {
+    pub fn new(sample_rate: u32) -> Self {
         Self {
             rack: ChannelRack::new(),
             mixer: Mixer::new(),
-            clock: Clock::zero(DEFAULT_SAMPLE_RATE),
+            clock: Clock::zero(sample_rate),
         }
     }
 
@@ -103,8 +101,9 @@ impl<const CHANNEL_RACK_SIZE: usize, const MIXER_SIZE: usize, const FX_SLOTS: us
     }
 
     pub fn tick_external(&mut self, tick: u32) -> Frame {
+        let output = self.tick_inner();
         self.clock.set(tick);
-        self.tick_inner()
+        output
     }
 
     fn tick_inner(&mut self) -> Frame {

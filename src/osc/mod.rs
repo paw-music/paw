@@ -119,6 +119,10 @@ impl<'a, O: Osc, const OSCS: usize> OscProps<'a, O, OSCS> {
             tune_cents: 0,
         }
     }
+
+    pub fn kind_mut(&mut self) -> &mut O::Props<'a> {
+        &mut self.kind
+    }
 }
 
 pub struct OscParams<'a, O: Osc, const OSCS: usize> {

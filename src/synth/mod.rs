@@ -115,6 +115,10 @@ impl<
         }
     }
 
+    pub fn props_mut(&mut self) -> &mut [OscProps<'static, O, OSCS>] {
+        &mut self.osc_props
+    }
+
     pub fn tick(&mut self, clock: &Clock) -> Frame {
         // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
         let osc_params = core::array::from_fn(|index| OscParams {

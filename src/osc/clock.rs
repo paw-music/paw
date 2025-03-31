@@ -1,4 +1,5 @@
-use core::ops::Mul;
+use core::{f32::EPSILON, ops::Mul};
+use micromath::F32Ext as _;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Clock {
@@ -28,7 +29,7 @@ impl Clock {
 
         let phase = delta as f32 * freq.inner() / self.sample_rate as f32;
 
-        if phase > 1.0 {
+        if (phase - 1.0).abs() <= EPSILON {
             *last_cycle = self.tick;
         }
 
@@ -78,6 +79,7 @@ impl Freq {
         Self(value as f32 * 1_000_000.0)
     }
 
+    #[inline]
     pub const fn inner(&self) -> f32 {
         self.0
     }

@@ -1,26 +1,40 @@
-use core::f32::consts::TAU;
-
-use lazy_static::lazy_static;
-
+use super::osc::WavetableOsc;
 use crate::{
     synth::Synth,
     wavetable::{Wavetable, WavetableProps, WavetableRow},
 };
-
-use super::osc::WavetableOsc;
+use core::f32::consts::TAU;
+use lazy_static::lazy_static;
+use micromath::F32Ext as _;
 
 const WAVETABLE_DEPTH: usize = 4;
 const WAVETABLE_LENGTH: usize = 1024;
-const SAMPLE_RATE: u32 = 44_100;
-const VOICES: usize = 8;
-const LFOS: usize = 2;
-const ENVS: usize = 2;
-const OSCS: usize = 2;
-pub type WavetableSynth = Synth<WavetableOsc<4, 1024>, 8, 2, 2, 3>;
+// const SAMPLE_RATE: u32 = 44_100;
+// const VOICES: usize = 8;
+// const LFOS: usize = 2;
+// const ENVS: usize = 2;
+// const OSCS: usize = 2;
+pub type WavetableSynth<
+    const DEPTH: usize,
+    const LENGTH: usize,
+    const VOICES: usize,
+    const LFOS: usize,
+    const ENVS: usize,
+    const OSCS: usize,
+> = Synth<WavetableOsc<DEPTH, LENGTH>, VOICES, LFOS, ENVS, OSCS>;
 
 // For test use only
 // TODO: Remove
-pub fn create_wavetable_synth(sample_rate: u32) -> WavetableSynth {
+pub fn create_basic_wavetable_synth<
+    // const DEPTH: usize,
+    // const LENGTH: usize,
+    const VOICES: usize,
+    const LFOS: usize,
+    const ENVS: usize,
+    const OSCS: usize,
+>(
+    sample_rate: u32,
+) -> WavetableSynth<WAVETABLE_DEPTH, WAVETABLE_LENGTH, VOICES, LFOS, ENVS, OSCS> {
     lazy_static! {
         static ref BASIC_WAVES_TABLE: Wavetable<WAVETABLE_DEPTH, WAVETABLE_LENGTH> =
             Wavetable::from_rows([

@@ -1,3 +1,6 @@
+use micromath::F32Ext;
+use num::Zero;
+
 use crate::{
     modulation::{ModValue, Modulate},
     param::f32::SignedUnitInterval,
@@ -25,7 +28,7 @@ impl<const LENGTH: usize> WavetableRow<LENGTH> {
 
 impl<const LENGTH: usize> WavetableRow<LENGTH> {
     pub fn lerp(&self, phase: f32) -> f32 {
-        debug_assert!(phase >= 0.0 && phase <= 1.0, "Malformed phase {phase}");
+        // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
 
         // FIXME: phase of 1.0 * LENGTH is max size, will it happen?
         let left_index = (phase * LENGTH as f32) as usize % LENGTH;
@@ -50,7 +53,7 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
     }
 
     pub fn at(&self, depth: usize, phase: f32) -> f32 {
-        debug_assert!(phase >= 0.0 && phase <= 1.0, "Malformed phase {phase}");
+        // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
 
         let row = &self.rows[depth % DEPTH];
 
@@ -126,20 +129,32 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENG
     }
 
     pub fn modulated_depth(&self) -> f32 {
-        (DEPTH as f32 + self.depth as f32 + DEPTH as f32 * self.depth_offset.inner()) % DEPTH as f32
+        let depth_offset = self.depth_offset.inner();
+        if depth_offset.is_zero() {
+            self.depth as f32
+        } else {
+            (DEPTH as f32 + self.depth as f32 + DEPTH as f32 * depth_offset) % DEPTH as f32
+        }
     }
 
     pub fn lerp(&self, phase: f32) -> f32 {
         let depth = self.modulated_depth();
 
         let left_depth = depth as usize;
-        let right_depth = (left_depth + 1) % DEPTH;
 
-        let right_depth_factor = depth.fract();
-        let left_depth_factor = 1.0 - right_depth_factor;
+        // Note: Integer depth optimization
+        // TODO: Should be is_zero or approx with small number?
+        if depth.fract().is_zero() {
+            self.wavetable.at(left_depth, phase)
+        } else {
+            let right_depth = (left_depth + 1) % DEPTH;
 
-        self.wavetable.at(left_depth, phase) * left_depth_factor
-            + self.wavetable.at(right_depth, phase) * right_depth_factor
+            let right_depth_factor = depth.fract();
+            let left_depth_factor = 1.0 - right_depth_factor;
+
+            self.wavetable.at(left_depth, phase) * left_depth_factor
+                + self.wavetable.at(right_depth, phase) * right_depth_factor
+        }
     }
 
     // pub fn with_depth_offset(&self, depth_offset: SignedUnitInterval) -> Self {

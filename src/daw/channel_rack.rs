@@ -1,7 +1,7 @@
 use super::mixer::{TrackOutput, UnmixedOutput};
 use crate::{
     midi::event::MidiEventListener, osc::clock::Clock, sample::Frame,
-    wavetable::synth::create_wavetable_synth,
+    wavetable::synth::create_basic_wavetable_synth,
 };
 use alloc::boxed::Box;
 
@@ -130,8 +130,9 @@ impl<const SIZE: usize> crate::param::ui::EguiComponent<(usize, Clock)> for Chan
             // TODO: Plugin manager
             if !self.is_full() {
                 if ui.button("Add instrument").clicked() {
-                    self.push_instrument(Box::new(create_wavetable_synth(clock.sample_rate)))
-                        .unwrap();
+                    todo!()
+                    // self.push_instrument(Box::new(create_basic_wavetable_synth(clock.sample_rate)))
+                    //     .unwrap();
                 }
             }
         });
@@ -173,13 +174,22 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
         self.channels.iter().all(Option::is_some)
     }
 
-    pub fn push_instrument(&mut self, instrument: Box<dyn Instrument>) -> Result<(), ()> {
-        if let Some(next) = self.channels.iter_mut().find(|channel| channel.is_none()) {
-            next.replace(Channel::new(instrument));
-            Ok(())
+    pub fn push_instrument(&mut self, instrument: Box<dyn Instrument>) -> Result<usize, ()> {
+        if let Some(id) = self
+            .channels
+            .iter_mut()
+            .position(|channel| channel.is_none())
+        {
+            self.channels[id].replace(Channel::new(instrument));
+
+            Ok(id)
         } else {
             Err(())
         }
+    }
+
+    pub fn set_active(&mut self, active: usize) {
+        self.active = Some(active);
     }
 
     // TODO: This should not tick but process active channel or played in sequencer

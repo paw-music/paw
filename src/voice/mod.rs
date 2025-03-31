@@ -97,25 +97,3 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
         sample.map(|sample| Frame::equal(sample).stereo_balanced(self.stereo_balance))
     }
 }
-
-// impl<O: Osc, const SIZE: usize, const SAMPLE_RATE: u32> Iterator
-//     for VoicesController<O, SIZE, SAMPLE_RATE>
-// where
-//     O::Item: Sample,
-// {
-//     type Item = O::Item;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // Note: Check if this logic with Some(....sum()) is right. Maybe if all voices are off it should return None
-
-//         Some(
-//         )
-//     }
-// }
-
-// impl<O: Osc, const SIZE: usize, const SAMPLE_RATE: u32> Source
-//     for VoicesController<O, SIZE, SAMPLE_RATE>
-// where
-//     <O as Iterator>::Item: Sample,
-// {
-// }

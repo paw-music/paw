@@ -1,3 +1,5 @@
+use micromath::F32Ext as _;
+
 pub struct OnePole {
     a0: f32,
     b1: f32,

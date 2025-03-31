@@ -8,6 +8,7 @@ use paw::{
 use std::sync::{Arc, Mutex};
 
 type Daw = paw::daw::Daw<8, 8, 4>;
+const SAMPLE_RATE: u32 = 48_000;
 
 fn note_from_nannou_key(key: nannou::event::Key) -> Result<Note, ()> {
     match key {
@@ -162,7 +163,7 @@ fn model(app: &App) -> Model {
 
     let audio_host = audio::Host::new();
 
-    let daw = Daw::new();
+    let daw = Daw::new(SAMPLE_RATE);
     let daw = Arc::new(Mutex::new(daw));
 
     let audio_model = AudioModel {
@@ -172,7 +173,7 @@ fn model(app: &App) -> Model {
     let stream = audio_host
         .new_output_stream(audio_model)
         .render(audio)
-        // .sample_rate(SAMPLE_RATE)
+        .sample_rate(SAMPLE_RATE)
         .build()
         .unwrap();
 
