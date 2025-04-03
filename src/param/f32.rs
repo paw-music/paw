@@ -12,6 +12,7 @@ pub struct UnitInterval(f32);
 impl Mul for UnitInterval {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
         Self::new(self.inner() * rhs.inner())
     }
@@ -23,11 +24,13 @@ impl UnitInterval {
     pub const EQUILIBRIUM: Self = Self(0.5);
     pub const MAX: Self = Self(1.0);
 
+    #[inline]
     pub fn new(value: f32) -> Self {
         Self(value.clamp(*Self::RANGE.start(), *Self::RANGE.end()))
     }
 
     /// Construct new [`UnitInterval`] panicking if value is not lying in its range
+    #[inline]
     pub fn new_checked(value: f32) -> Self {
         debug_assert!(Self::RANGE.contains(&value));
         Self(value)
@@ -43,6 +46,7 @@ impl UnitInterval {
         self.0
     }
 
+    #[inline]
     pub fn remap_into_signed(&self) -> SignedUnitInterval {
         SignedUnitInterval::new(self.0 * 2.0 - 1.0)
     }
@@ -66,14 +70,16 @@ impl Display for UnitInterval {
 }
 
 impl PartialOrd<f32> for UnitInterval {
+    #[inline]
     fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
         self.0.partial_cmp(other)
     }
 }
 
 impl PartialEq<f32> for UnitInterval {
+    #[inline]
     fn eq(&self, other: &f32) -> bool {
-        self.0 == *other
+        self.0.eq(other)
     }
 }
 
@@ -92,6 +98,7 @@ impl HalfUnitInterval {
     pub const EQUILIBRIUM: Self = Self(0.25);
     pub const MAX: Self = Self(0.5);
 
+    #[inline]
     pub fn new(value: f32) -> Self {
         Self(value.clamp(*Self::RANGE.start(), *Self::RANGE.end()))
     }
@@ -114,14 +121,16 @@ impl HalfUnitInterval {
 }
 
 impl PartialOrd<f32> for HalfUnitInterval {
+    #[inline]
     fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
         self.0.partial_cmp(other)
     }
 }
 
 impl PartialEq<f32> for HalfUnitInterval {
+    #[inline]
     fn eq(&self, other: &f32) -> bool {
-        self.0 == *other
+        self.0.eq(other)
     }
 }
 
@@ -131,18 +140,21 @@ pub struct SignedUnitInterval(f32);
 impl Neg for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn neg(self) -> Self::Output {
         Self::new(self.inner().neg())
     }
 }
 
 impl PartialOrd<f32> for SignedUnitInterval {
+    #[inline]
     fn partial_cmp(&self, other: &f32) -> Option<core::cmp::Ordering> {
         self.inner().partial_cmp(other)
     }
 }
 
 impl PartialEq<f32> for SignedUnitInterval {
+    #[inline]
     fn eq(&self, other: &f32) -> bool {
         self.inner().eq(other)
     }
@@ -155,6 +167,7 @@ impl Display for SignedUnitInterval {
 }
 
 impl Sum for SignedUnitInterval {
+    #[inline]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         Self::new(iter.map(|el| el.inner()).sum())
     }
@@ -163,6 +176,7 @@ impl Sum for SignedUnitInterval {
 impl Mul for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
         Self::new(self.0 * rhs.0)
     }
@@ -171,6 +185,7 @@ impl Mul for SignedUnitInterval {
 impl Mul<f32> for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: f32) -> Self::Output {
         Self::new(self.0 * rhs)
     }
@@ -179,6 +194,7 @@ impl Mul<f32> for SignedUnitInterval {
 impl Div<f32> for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn div(self, rhs: f32) -> Self::Output {
         Self::new(self.0 / rhs)
     }
@@ -187,6 +203,7 @@ impl Div<f32> for SignedUnitInterval {
 impl Mul<UnitInterval> for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: UnitInterval) -> Self::Output {
         Self::new(self.0 * rhs.0)
     }
@@ -195,6 +212,7 @@ impl Mul<UnitInterval> for SignedUnitInterval {
 impl Add for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         Self::new(self.0 + rhs.0)
     }
@@ -203,6 +221,7 @@ impl Add for SignedUnitInterval {
 impl Sub for SignedUnitInterval {
     type Output = Self;
 
+    #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
         Self::new(self.0 - rhs.0)
     }
@@ -214,11 +233,13 @@ impl SignedUnitInterval {
     pub const EQUILIBRIUM: Self = Self(0.0);
     pub const MAX: Self = Self(1.0);
 
+    #[inline]
     pub fn new(value: f32) -> Self {
         Self(value.clamp(*Self::RANGE.start(), *Self::RANGE.end()))
     }
 
     /// Construct new [`SignedUnitInterval`] panicking if value is not lying in its range
+    #[inline]
     pub fn new_checked(value: f32) -> Self {
         debug_assert!(Self::RANGE.contains(&value));
         Self(value)
@@ -229,6 +250,7 @@ impl SignedUnitInterval {
         self.0
     }
 
+    #[inline]
     pub fn remap_into_ui(&self) -> UnitInterval {
         UnitInterval::new((self.0 + 1.0) / 2.0)
     }

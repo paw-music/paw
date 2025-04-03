@@ -17,9 +17,16 @@ egui = ["dep:egui"]
 std = []
 
 [dev-dependencies]
+criterion = "0.5.1"
 nannou = "0.19.0"
 nannou_audio = "0.19.0"
 nannou_egui = "0.19.0"
+plotters = "0.3.7"
 
-[profile.dev]
-opt-level = 3
+[[bench]]
+harness = false
+name = "wt"
+
+# [[bench]]
+# harness = false
+# name = "common"

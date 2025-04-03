@@ -11,6 +11,7 @@ use micromath::F32Ext as _;
 // TODO: We can do const expressions for voice count! [Optimization]
 /// Compute general even "spread" of voices, used for detune and stereo spread
 /// Accepts function mapping offset from center to output value.
+#[inline]
 pub fn voices_spread<T>(count: usize, f: impl Fn(f32) -> T) -> impl Iterator<Item = T> {
     let half_voices = count as f32 / 2.0;
 
@@ -28,6 +29,7 @@ pub fn voices_spread<T>(count: usize, f: impl Fn(f32) -> T) -> impl Iterator<Ite
 // TODO: Blend mode. Like Center vs Detuned, Linear (more detuned voices blend less)
 /// Distribute detune by voices, returns iterator of (detune factor, voice amp determined by blend)
 /// This is a distinct function to be used both for synthesizer and UI to draw unison parameters
+#[inline]
 pub fn voices_detune(
     count: usize,
     detune: UnitInterval,
@@ -51,6 +53,7 @@ pub fn voices_detune(
     })
 }
 
+#[inline]
 pub fn voices_stereo_spread(
     count: usize,
     amount: UnitInterval,
@@ -383,6 +386,7 @@ impl<
     //     self.voices.iter_mut()
     // }
 
+    #[inline(always)]
     pub fn has_note(&self, note: Note) -> bool {
         self.voices_notes
             .iter()

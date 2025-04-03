@@ -33,10 +33,12 @@ impl<
         const OSCS: usize,
     > Instrument for Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
+    #[inline]
     fn tick(&mut self, clock: &Clock) -> Frame {
         self.tick(clock)
     }
 
+    #[inline]
     fn name(&self) -> &str {
         "Synth"
     }
@@ -76,6 +78,7 @@ impl<
         const OSCS: usize,
     > MidiEventListener for Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
+    #[inline]
     fn note_on(
         &mut self,
         clock: &Clock,
@@ -86,6 +89,7 @@ impl<
         self.voices.note_on(clock, note, velocity);
     }
 
+    #[inline]
     fn note_off(
         &mut self,
         clock: &Clock,
@@ -115,6 +119,7 @@ impl<
         }
     }
 
+    #[inline]
     pub fn props_mut(&mut self) -> &mut [OscProps<'static, O, OSCS>] {
         &mut self.osc_props
     }
@@ -152,5 +157,34 @@ impl<
         );
 
         frame
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        midi::event::MidiEventListener, osc::clock::Clock, param::f32::UnitInterval,
+        wavetable::synth::create_basic_wavetable_synth,
+    };
+
+    #[test]
+    fn high_value_tick_precision() {
+        let clock = Clock {
+            sample_rate: 44_000,
+            tick: 0,
+        };
+
+        let mut synth = create_basic_wavetable_synth::<1, 1, 1, 1>(clock.sample_rate);
+
+        let note = crate::midi::note::Note::A4;
+        synth.note_on(&clock, note, UnitInterval::MAX);
+        let note_cycle = (clock.sample_rate as f32 / note.freq().inner()) as u32;
+
+        assert_eq!(synth.tick(&clock), synth.tick(&clock.with_tick(note_cycle)));
+
+        // assert_eq!(
+        //     synth.tick(&clock),
+        //     synth.tick(&clock.with_tick(clock.sample_rate * 11587))
+        // );
     }
 }

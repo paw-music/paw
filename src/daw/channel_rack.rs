@@ -57,6 +57,7 @@ impl crate::param::ui::EguiComponent<(usize, bool, bool, usize, Clock), bool> fo
 }
 
 impl MidiEventListener for Channel {
+    #[inline]
     fn note_on(
         &mut self,
         clock: &Clock,
@@ -66,6 +67,7 @@ impl MidiEventListener for Channel {
         self.instrument.note_on(clock, note, velocity);
     }
 
+    #[inline]
     fn note_off(
         &mut self,
         clock: &Clock,
@@ -84,6 +86,7 @@ impl Channel {
         }
     }
 
+    #[inline]
     pub fn instrument_mut(&mut self) -> &mut dyn Instrument {
         self.instrument.as_mut()
     }
@@ -140,6 +143,7 @@ impl<const SIZE: usize> crate::param::ui::EguiComponent<(usize, Clock)> for Chan
 }
 
 impl<const SIZE: usize> MidiEventListener for ChannelRack<SIZE> {
+    #[inline]
     fn note_on(
         &mut self,
         clock: &Clock,
@@ -150,6 +154,7 @@ impl<const SIZE: usize> MidiEventListener for ChannelRack<SIZE> {
             .for_each(|channel| channel.note_on(clock, note, velocity));
     }
 
+    #[inline]
     fn note_off(
         &mut self,
         clock: &Clock,
@@ -170,6 +175,7 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
         }
     }
 
+    #[inline]
     pub fn is_full(&self) -> bool {
         self.channels.iter().all(Option::is_some)
     }
@@ -188,6 +194,7 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
         }
     }
 
+    #[inline]
     pub fn set_active(&mut self, active: usize) {
         self.active = Some(active);
     }
@@ -200,6 +207,7 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
     //         .fold(UnmixedOutput::zero(), |output, channel| output + channel)
     // }
 
+    #[inline]
     fn iter_channels_mut(&mut self) -> impl Iterator<Item = &mut Channel> {
         self.channels
             .iter_mut()

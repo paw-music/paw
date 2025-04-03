@@ -53,3 +53,21 @@ pub fn create_basic_wavetable_synth<
         WavetableProps::new(index, &BASIC_WAVES_TABLE)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{midi::event::MidiEventListener, osc::clock::Clock, param::f32::UnitInterval};
+
+    use super::create_basic_wavetable_synth;
+
+    #[test]
+    fn cycle_precision() {
+        const SAMPLE_RATE: u32 = 44_000;
+        let mut synth = create_basic_wavetable_synth::<1, 0, 0, 1>(SAMPLE_RATE);
+
+        let clock = Clock::zero(SAMPLE_RATE);
+        synth.note_on(&clock, crate::midi::note::Note::A4, UnitInterval::MAX);
+
+        assert_eq!(synth.tick(&clock), synth.tick(&clock.with_tick(100)))
+    }
+}

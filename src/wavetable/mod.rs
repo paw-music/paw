@@ -1,14 +1,16 @@
-use micromath::F32Ext;
-use num::Zero;
-
 use crate::{
     modulation::{ModValue, Modulate},
     param::f32::SignedUnitInterval,
     sample::Sample,
 };
+use micromath::F32Ext as _;
+use num::Zero;
 
 pub mod osc;
 pub mod synth;
+
+// /// The minimum amount of deviation from integer for lerp to be applied to neighbor samples
+// pub const WAVETABLE_LERP_DELTA_THRESHOLD: f32 = 0.001;
 
 #[derive(Debug)]
 pub struct WavetableRow<const LENGTH: usize> {
@@ -27,18 +29,28 @@ impl<const LENGTH: usize> WavetableRow<LENGTH> {
 }
 
 impl<const LENGTH: usize> WavetableRow<LENGTH> {
+    #[inline]
     pub fn lerp(&self, phase: f32) -> f32 {
         // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
 
-        // FIXME: phase of 1.0 * LENGTH is max size, will it happen?
+        // FIXME: phase of 1.0 * LENGTH is max size, but phase is never 1.0, will it happen?
         let left_index = (phase * LENGTH as f32) as usize % LENGTH;
         let right_index = (left_index + 1) % LENGTH;
 
         let right_index_factor = phase.fract();
         let left_index_factor = 1.0 - right_index_factor;
 
+        // if right_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
+        //     self.samples[right_index]
+        // } else if left_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
+        //     self.samples[left_index]
+        // } else {
         self.samples[left_index].amp(left_index_factor)
             + self.samples[right_index].amp(right_index_factor)
+        // }
+
+        // self.samples[left_index]
+        //     + phase.fract() * (self.samples[right_index] - self.samples[left_index])
     }
 }
 
@@ -52,6 +64,7 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
         Self { rows }
     }
 
+    #[inline(always)]
     pub fn at(&self, depth: usize, phase: f32) -> f32 {
         // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
 
@@ -128,6 +141,7 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENG
         }
     }
 
+    #[inline]
     pub fn modulated_depth(&self) -> f32 {
         let depth_offset = self.depth_offset.inner();
         if depth_offset.is_zero() {
@@ -137,6 +151,7 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENG
         }
     }
 
+    #[inline]
     pub fn lerp(&self, phase: f32) -> f32 {
         let depth = self.modulated_depth();
 

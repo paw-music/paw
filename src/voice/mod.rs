@@ -73,6 +73,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
         self.stereo_balance = stereo_balance;
     }
 
+    #[inline]
     pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
         let freq = fm(self.root_freq, self.detune.inner());
 

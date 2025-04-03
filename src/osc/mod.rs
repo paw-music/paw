@@ -120,6 +120,7 @@ impl<'a, O: Osc, const OSCS: usize> OscProps<'a, O, OSCS> {
         }
     }
 
+    #[inline]
     pub fn kind_mut(&mut self) -> &mut O::Props<'a> {
         &mut self.kind
     }
@@ -131,6 +132,7 @@ pub struct OscParams<'a, O: Osc, const OSCS: usize> {
 }
 
 impl<'a, O: Osc, const OSCS: usize> OscParams<'a, O, OSCS> {
+    #[inline]
     fn tune_mod(&self) -> f32 {
         self.pitch_mod.as_sui().inner()
             + self.props.tune_semitones as f32 / 12.0
@@ -178,6 +180,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
         }
     }
 
+    #[inline]
     pub fn tick<'a>(
         &mut self,
         clock: &Clock,

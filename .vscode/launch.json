@@ -8,6 +8,15 @@
         "args": ["build", "--example", "sandbox", "--features", "egui"]
       },
       "args": []
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Notebook",
+      "cargo": {
+        "args": ["build", "--example", "notebook", "--features", "egui"]
+      },
+      "args": []
     }
   ]
 }

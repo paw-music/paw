@@ -9,6 +9,7 @@ pub struct Clock {
 }
 
 impl Clock {
+    #[inline]
     pub fn zero(sample_rate: u32) -> Self {
         Self {
             sample_rate,
@@ -16,21 +17,29 @@ impl Clock {
         }
     }
 
+    #[inline(always)]
     pub fn tick(&mut self) {
         self.tick += 1;
     }
 
+    #[inline(always)]
     pub fn set(&mut self, tick: u32) {
         self.tick = tick;
     }
 
-    pub fn phase(&self, freq: Freq, last_cycle: &mut u32) -> f32 {
-        let delta = self.tick - *last_cycle;
+    #[inline(always)]
+    pub fn with_tick(self, tick: u32) -> Self {
+        Self { tick, ..self }
+    }
+
+    #[inline(always)]
+    pub fn phase(&self, freq: Freq, last_sync: &mut u32) -> f32 {
+        let delta = self.tick - *last_sync;
 
         let phase = delta as f32 * freq.inner() / self.sample_rate as f32;
 
-        if (phase - 1.0).abs() <= EPSILON {
-            *last_cycle = self.tick;
+        if (1.0 - phase) <= 1.0 / freq.inner() {
+            *last_sync = self.tick;
         }
 
         phase.fract()
@@ -43,6 +52,7 @@ pub struct Freq(f32);
 impl Mul<f32> for Freq {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: f32) -> Self::Output {
         Self::new(self.inner() * rhs)
     }
@@ -55,26 +65,31 @@ impl Freq {
     pub const KHZ: Self = Self::new(1_000.0);
     pub const MHZ: Self = Self::new(1_000_000.0);
 
+    #[inline]
     pub const fn new(value: f32) -> Self {
         Self(value)
     }
 
     #[allow(non_snake_case)]
+    #[inline]
     pub const fn mHz(value: u32) -> Self {
         Self(value as f32 / 1_000.0)
     }
 
     #[allow(non_snake_case)]
+    #[inline]
     pub const fn Hz(value: u32) -> Self {
         Self(value as f32)
     }
 
     #[allow(non_snake_case)]
+    #[inline]
     pub const fn kHz(value: u32) -> Self {
         Self(value as f32 * 1_000.0)
     }
 
     #[allow(non_snake_case)]
+    #[inline]
     pub const fn MHz(value: u32) -> Self {
         Self(value as f32 * 1_000_000.0)
     }

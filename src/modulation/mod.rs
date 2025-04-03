@@ -14,14 +14,17 @@ pub trait Modulate {
     fn modulated(&self, f: impl FnMut(ModTarget) -> ModValue) -> Self;
 }
 
+#[inline]
 pub fn fm(freq: Freq, m: f32) -> Freq {
     freq * 2f32.powf(m)
 }
 
+#[inline]
 pub fn am(output: f32, m: f32) -> f32 {
     output * m.powf(f32::consts::E)
 }
 
+#[inline]
 pub fn rm(output: f32, m: f32) -> f32 {
     output * m
 }
@@ -38,6 +41,7 @@ pub enum ModValue {
 }
 
 impl ModValue {
+    #[inline]
     pub fn as_ui(&self) -> UnitInterval {
         match self {
             ModValue::None => UnitInterval::MIN,
@@ -46,9 +50,10 @@ impl ModValue {
         }
     }
 
+    #[inline]
     pub fn as_sui(&self) -> SignedUnitInterval {
         match self {
-            ModValue::None => SignedUnitInterval::MIN,
+            ModValue::None => SignedUnitInterval::EQUILIBRIUM,
             ModValue::Env(env) => env.remap_into_signed(),
             ModValue::Lfo(lfo) => *lfo,
         }
@@ -56,6 +61,7 @@ impl ModValue {
 
     // pub fn or(self, other: Self)
 
+    #[inline]
     pub const fn env(value: Option<UnitInterval>) -> Self {
         if let Some(value) = value {
             Self::Env(value)
@@ -64,6 +70,7 @@ impl ModValue {
         }
     }
 
+    #[inline]
     pub const fn lfo(value: Option<SignedUnitInterval>) -> Self {
         if let Some(value) = value {
             Self::Lfo(value)

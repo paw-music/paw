@@ -5,10 +5,7 @@ use super::{
     lfo::{LfoPack, LfoProps},
     ModValue,
 };
-use crate::{
-    midi::event::MidiEventListener,
-    osc::clock::Clock,
-};
+use crate::{midi::event::MidiEventListener, osc::clock::Clock};
 
 // #[derive(Debug, Clone, Copy)]
 // pub enum ModSource {
@@ -57,6 +54,7 @@ pub struct ModPack<const LFOS: usize, const ENVS: usize, const OSCS: usize> {
 impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> MidiEventListener
     for ModPack<LFOS, ENVS, OSCS>
 {
+    #[inline]
     fn note_on(
         &mut self,
         clock: &crate::osc::clock::Clock,
@@ -67,6 +65,7 @@ impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> MidiEventListener
         self.envs.note_on(clock, note, velocity);
     }
 
+    #[inline]
     fn note_off(
         &mut self,
         clock: &crate::osc::clock::Clock,

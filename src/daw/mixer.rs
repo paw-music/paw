@@ -14,6 +14,7 @@ pub struct TrackOutput {
 }
 
 impl TrackOutput {
+    #[inline]
     pub fn new(track: usize, output: Frame) -> Self {
         Self { track, output }
     }
@@ -24,16 +25,11 @@ pub struct UnmixedOutput<const SIZE: usize> {
 }
 
 impl<const SIZE: usize> From<TrackOutput> for UnmixedOutput<SIZE> {
+    #[inline]
     fn from(value: TrackOutput) -> Self {
-        Self {
-            tracks: core::array::from_fn(|index| {
-                if index == value.track {
-                    value.output
-                } else {
-                    Frame::zero()
-                }
-            }),
-        }
+        let mut tracks = [Frame::zero(); SIZE];
+        tracks[value.track] = value.output;
+        Self { tracks }
     }
 }
 
@@ -49,6 +45,7 @@ impl<const SIZE: usize> Add<TrackOutput> for UnmixedOutput<SIZE> {
 impl<const SIZE: usize> Add for UnmixedOutput<SIZE> {
     type Output = Self;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         self.zip(rhs, |lhs, rhs| lhs + rhs)
     }
@@ -73,12 +70,14 @@ impl<const SIZE: usize> UnmixedOutput<SIZE> {
     //     }
     // }
 
+    #[inline]
     pub fn from_fn(f: impl FnMut(usize) -> Frame) -> Self {
         Self {
             tracks: core::array::from_fn(f),
         }
     }
 
+    #[inline]
     pub fn zip(
         &self,
         other: UnmixedOutput<SIZE>,
@@ -140,6 +139,7 @@ impl<const FX_SLOTS: usize> MixerTrack<FX_SLOTS> {
         }
     }
 
+    #[inline]
     pub fn level_mut(&mut self) -> &mut UnitInterval {
         &mut self.level
     }

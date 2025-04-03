@@ -1,3 +1,5 @@
+use core::f32::EPSILON;
+
 use crate::{
     midi::event::MidiEventListener,
     osc::clock::{Clock, Freq},
@@ -135,6 +137,7 @@ pub struct Lfo {
 }
 
 impl MidiEventListener for Lfo {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = clock;
         let _ = velocity;
@@ -144,6 +147,7 @@ impl MidiEventListener for Lfo {
         self.state = true;
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = clock;
         let _ = velocity;
@@ -162,10 +166,11 @@ impl Lfo {
         }
     }
 
+    // TODO: Use LUT
+    #[inline]
     pub fn at(phase: f32, params: &LfoProps) -> f32 {
         match params.waveform {
             LfoWaveform::Pulse(pulse_width) => {
-                // let pulse_width = ;
                 if phase < pulse_width.inner() {
                     1.0
                 } else {
@@ -187,7 +192,7 @@ impl Lfo {
         let phase = clock.phase(params.freq, &mut self.last_cycle);
 
         // Continue one cycle of LFO even if it is not triggered to avoid clicking. So here we stop non-triggered LFO only when phase is zero, i.e. the cycle is complete
-        if !self.state && phase == 0.0 {
+        if !self.state && phase <= EPSILON {
             return None;
         }
 
@@ -203,12 +208,14 @@ pub struct LfoPack<const SIZE: usize> {
 }
 
 impl<const SIZE: usize> MidiEventListener for LfoPack<SIZE> {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.lfos
             .iter_mut()
             .for_each(|lfo| lfo.note_on(clock, note, velocity));
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.lfos
             .iter_mut()
