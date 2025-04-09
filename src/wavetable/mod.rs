@@ -95,6 +95,7 @@ pub struct WavetableProps<'a, const DEPTH: usize, const LENGTH: usize> {
 }
 
 impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a, DEPTH, LENGTH> {
+    #[inline]
     fn modulated(
         &self,
         mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue,

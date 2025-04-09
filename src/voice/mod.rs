@@ -3,7 +3,7 @@ use crate::{
     modulation::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack, ModValue},
     osc::{
         clock::{Clock, Freq},
-        Osc, OscPack, OscParams,
+        OperatorPack, Osc, OscParams,
     },
     param::f32::{SignedUnitInterval, UnitInterval},
     sample::Frame,
@@ -21,8 +21,9 @@ pub struct VoiceParams<'a, O: Osc, const OSCS: usize> {
 
 // FIXME: Env changes how FM sounds with two oscs
 
+#[derive(Clone)]
 pub struct Voice<O: Osc, const LFOS: usize, const ENVS: usize, const OSCS: usize> {
-    oscs: OscPack<O, OSCS>,
+    ops: OperatorPack<O, OSCS>,
     root_freq: Freq,
     detune: SignedUnitInterval,
     blend: UnitInterval,
@@ -34,18 +35,20 @@ pub struct Voice<O: Osc, const LFOS: usize, const ENVS: usize, const OSCS: usize
 impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize> MidiEventListener
     for Voice<O, LFOS, ENVS, OSCS>
 {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.root_freq = note.freq();
         self.velocity = velocity;
 
         self.mods.note_on(clock, note, velocity);
-        self.oscs.note_on(clock, note, velocity);
+        self.ops.note_on(clock, note, velocity);
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.velocity = UnitInterval::MIN;
         self.mods.note_off(clock, note, velocity);
-        self.oscs.note_off(clock, note, velocity);
+        self.ops.note_off(clock, note, velocity);
     }
 }
 
@@ -54,7 +57,7 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
 {
     pub fn new(osc: impl Fn(usize) -> O) -> Self {
         Self {
-            oscs: OscPack::new(osc),
+            ops: OperatorPack::new(osc),
             root_freq: Freq::ZERO,
             detune: SignedUnitInterval::EQUILIBRIUM,
             blend: UnitInterval::MAX,
@@ -64,17 +67,19 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
         }
     }
 
+    #[inline]
     pub fn set_detune(&mut self, blend: UnitInterval, detune: SignedUnitInterval) {
         self.blend = blend;
         self.detune = detune;
     }
 
+    #[inline]
     pub fn set_stereo_balance(&mut self, stereo_balance: UnitInterval) {
         self.stereo_balance = stereo_balance;
     }
 
     #[inline]
-    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Option<Frame> {
+    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Frame {
         let freq = fm(self.root_freq, self.detune.inner());
 
         // TODO: Should blend and velocity be passed to osc or is it a post-modulation?
@@ -90,11 +95,8 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
                 ModValue::Lfo(lfo) => lfo.remap_into_ui() * self.velocity,
             };
 
-        let sample = self
-            .oscs
-            .tick(clock, freq, &params.osc_params)
-            .map(|sample| sample * amp.inner());
+        let sample = self.ops.tick(clock, freq, &params.osc_params) * amp.inner();
 
-        sample.map(|sample| Frame::equal(sample).stereo_balanced(self.stereo_balance))
+        Frame::equal(sample).stereo_balanced(self.stereo_balance)
     }
 }

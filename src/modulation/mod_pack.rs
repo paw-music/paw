@@ -37,6 +37,7 @@ impl Display for ModTarget {
 }
 
 impl ModTarget {
+    #[inline]
     pub fn each<const OSCS: usize>() -> impl Iterator<Item = Self> {
         [Self::GlobalLevel, Self::GlobalPitch]
             .into_iter()
@@ -46,6 +47,7 @@ impl ModTarget {
     }
 }
 
+#[derive(Clone)]
 pub struct ModPack<const LFOS: usize, const ENVS: usize, const OSCS: usize> {
     lfos: LfoPack<LFOS>,
     envs: EnvPack<ENVS>,
@@ -85,6 +87,7 @@ impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> ModPack<LFOS, ENVS
         }
     }
 
+    #[inline]
     pub fn tick(
         &mut self,
         clock: &Clock,

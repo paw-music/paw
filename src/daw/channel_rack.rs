@@ -1,7 +1,8 @@
 use super::mixer::{TrackOutput, UnmixedOutput};
 use crate::{
-    midi::event::MidiEventListener, osc::clock::Clock, sample::Frame,
-    wavetable::synth::create_basic_wavetable_synth,
+    midi::event::MidiEventListener,
+    osc::clock::{Clock, Tick},
+    sample::Frame,
 };
 use alloc::boxed::Box;
 
@@ -9,18 +10,26 @@ pub trait Instrument: MidiEventListener + Send {
     fn tick(&mut self, clock: &Clock) -> Frame;
     fn name(&self) -> &str;
 
+    #[inline]
+    fn process_buffer(&mut self, clock: &Clock, buffer: &mut [Frame]) {
+        buffer
+            .iter_mut()
+            .enumerate()
+            .for_each(|(offset, frame)| *frame = self.tick(&clock.sub_tick(offset as Tick)));
+    }
+
     #[cfg(feature = "egui")]
     fn egui(&mut self, ui: &mut egui::Ui, params: (Clock,));
 }
 
-pub(super) struct Channel {
+pub struct RackChannel {
     // TODO: Volume and Panning
     mixer_track: usize,
     instrument: Box<dyn Instrument>,
 }
 
 #[cfg(feature = "egui")]
-impl crate::param::ui::EguiComponent<(usize, bool, bool, usize, Clock), bool> for Channel {
+impl crate::param::ui::EguiComponent<(usize, bool, bool, usize, Clock), bool> for RackChannel {
     #[must_use]
     fn egui(
         &mut self,
@@ -56,7 +65,7 @@ impl crate::param::ui::EguiComponent<(usize, bool, bool, usize, Clock), bool> fo
     }
 }
 
-impl MidiEventListener for Channel {
+impl MidiEventListener for RackChannel {
     #[inline]
     fn note_on(
         &mut self,
@@ -78,7 +87,7 @@ impl MidiEventListener for Channel {
     }
 }
 
-impl Channel {
+impl RackChannel {
     fn new(instrument: Box<dyn Instrument>) -> Self {
         Self {
             mixer_track: 0,
@@ -91,13 +100,19 @@ impl Channel {
         self.instrument.as_mut()
     }
 
+    #[inline]
     pub fn tick(&mut self, clock: &Clock) -> TrackOutput {
         TrackOutput::new(self.mixer_track, self.instrument.tick(clock))
+    }
+
+    #[inline]
+    pub fn process_buffer(&mut self, clock: &Clock, buffer: &mut [Frame]) {
+        self.instrument.process_buffer(clock, buffer);
     }
 }
 
 pub struct ChannelRack<const SIZE: usize> {
-    channels: [Option<Channel>; SIZE],
+    channels: [Option<RackChannel>; SIZE],
     active: Option<usize>,
     is_active_playing: bool,
 }
@@ -186,7 +201,7 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
             .iter_mut()
             .position(|channel| channel.is_none())
         {
-            self.channels[id].replace(Channel::new(instrument));
+            self.channels[id].replace(RackChannel::new(instrument));
 
             Ok(id)
         } else {
@@ -208,26 +223,45 @@ impl<const SIZE: usize> ChannelRack<SIZE> {
     // }
 
     #[inline]
-    fn iter_channels_mut(&mut self) -> impl Iterator<Item = &mut Channel> {
+    fn iter_channels_mut(&mut self) -> impl Iterator<Item = &mut RackChannel> {
         self.channels
             .iter_mut()
             .filter_map(|channel| channel.as_mut())
     }
 
+    #[inline]
     pub fn tick_active<const MIXER_SIZE: usize>(
         &mut self,
         clock: &Clock,
     ) -> UnmixedOutput<MIXER_SIZE> {
-        if let Some(channel) = self
-            .active
-            .map(|active| self.channels[active].as_mut())
-            .flatten()
-        {
-            self.is_active_playing = true;
-            channel.tick(clock).into()
-        } else {
-            self.is_active_playing = false;
-            UnmixedOutput::zero()
-        }
+        self.active
+            .and_then(|active| {
+                self.channels[active].as_mut().map(|channel| {
+                    self.is_active_playing = true;
+                    channel.tick(clock).into()
+                })
+            })
+            .unwrap_or_else(|| {
+                self.is_active_playing = false;
+                UnmixedOutput::zero()
+            })
+    }
+
+    #[inline]
+    pub fn process_buffer_active<const MIXER_SIZE: usize>(
+        &mut self,
+        clock: &Clock,
+        buffer: &mut [Frame],
+    ) -> Option<usize> {
+        self.active.and_then(|active| {
+            if let Some(channel) = self.channels[active].as_mut() {
+                self.is_active_playing = true;
+                channel.process_buffer(clock, buffer);
+                Some(channel.mixer_track)
+            } else {
+                self.is_active_playing = false;
+                None
+            }
+        })
     }
 }

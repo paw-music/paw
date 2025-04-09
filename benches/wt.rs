@@ -1,31 +1,65 @@
-use std::f32::consts::TAU;
-
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use paw::{
+    daw::{channel_rack::Instrument, Daw},
     midi::event::MidiEventListener,
     osc::clock::Clock,
     param::f32::UnitInterval,
-    wavetable::{synth::create_basic_wavetable_synth, Wavetable, WavetableProps},
+    sample::Frame,
+    wavetable::{
+        synth::{create_basic_wavetable_synth, WavetableSynth},
+        Wavetable, WavetableProps,
+    },
 };
+use pprof::criterion::PProfProfiler;
+use std::f32::consts::TAU;
 
 const SAMPLE_RATE: u32 = 48_000;
 
-fn wavetable_synth_1s<
+fn create_playing_wt_synth<
     const VOICES: usize,
     const LFOS: usize,
     const ENVS: usize,
     const OSCS: usize,
->() {
+>(
+    clock: &Clock,
+) -> WavetableSynth<4, 1024, VOICES, LFOS, ENVS, OSCS> {
     let mut synth = create_basic_wavetable_synth::<VOICES, LFOS, ENVS, OSCS>(SAMPLE_RATE);
-
-    let mut clock = Clock::zero(SAMPLE_RATE);
 
     synth.note_on(&clock, paw::midi::note::Note::A4, UnitInterval::MAX);
 
-    for _ in 0..SAMPLE_RATE {
-        synth.tick(&clock);
-        clock.tick();
-    }
+    synth
+}
+
+macro_rules! wavetable_synth_1s_bench {
+    ($group: ident: [
+        $($voices: expr, $lfos: expr, $envs: expr, $oscs: expr),*
+        $(,)?
+    ]) => {
+        $(
+            let preset = ($voices, $lfos, $envs, $oscs);
+            $group.bench_with_input(format!("Sample-by-sample {preset:?}"), &preset, |b, _| {
+                let mut clock = Clock::zero(SAMPLE_RATE);
+                let mut synth = create_playing_wt_synth::<$voices, $lfos, $envs, $oscs>(&clock);
+
+                b.iter(|| {
+                    for _ in 0..SAMPLE_RATE as usize {
+                        synth.tick(&clock);
+                        clock.tick();
+                    }
+                });
+            });
+
+            $group.bench_with_input(format!("Buffer processing {preset:?}"), &preset, |b, _| {
+                let clock = Clock::zero(SAMPLE_RATE);
+                let mut synth = create_playing_wt_synth::<$voices, $lfos, $envs, $oscs>(&clock);
+                let mut buffer = [Frame::zero(); SAMPLE_RATE as usize];
+
+                b.iter(|| {
+                    synth.process_buffer(&clock, &mut buffer);
+                });
+            });
+        )*
+    };
 }
 
 fn bench(c: &mut Criterion) {
@@ -35,54 +69,143 @@ fn bench(c: &mut Criterion) {
 
     let props = WavetableProps::new(0, &wt);
 
-    c.bench_function("WavetableProps::lerp", |b| {
-        b.iter(|| props.lerp(black_box(0.1276438512323)))
-    });
+    {
+        let mut group = c.benchmark_group("WavetableProps");
+        let group = group.sample_size(10_000);
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=0,ENVS=0,OSCS=0>", |b| {
-        b.iter(wavetable_synth_1s::<1, 0, 0, 0>);
-    });
+        group.bench_function("lerp", |b| {
+            b.iter(|| props.lerp(black_box(0.1276438512323)))
+        });
+    }
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=1,ENVS=1,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<1, 1, 1, 1>);
-    });
+    {
+        let mut group = c.benchmark_group("1s WT synth playback");
+        let group = group.sample_size(100);
 
-    c.bench_function("wavetable_synth_1s<VOICES=8,LFOS=1,ENVS=1,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<8, 1, 1, 1>);
-    });
+        wavetable_synth_1s_bench!(
+            group: [
+                1, 0, 0, 0,
+                1, 1, 1, 1,
+                8, 1, 1, 1,
+                16, 1, 1, 1,
+                1, 8, 1, 1,
+                1, 16, 1, 1,
+                1, 1, 8, 1,
+                1, 1, 16, 1,
+                1, 1, 1, 8,
+                1, 1, 1, 16,
+            ]
+        );
+    }
 
-    c.bench_function("wavetable_synth_1s<VOICES=16,LFOS=1,ENVS=1,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<16, 1, 1, 1>);
-    });
+    {
+        let mut group = c.benchmark_group("Synth vs DAW overhead");
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=8,ENVS=1,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<1, 8, 1, 1>);
-    });
+        const VOICES: usize = 16;
+        const LFOS: usize = 4;
+        const ENVS: usize = 4;
+        const OSCS: usize = 4;
+        const BUFFER_SIZE: usize = 4096;
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=16,ENVS=1,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<1, 16, 1, 1>);
-    });
+        let mut clock = Clock::zero(SAMPLE_RATE);
+        let mut synth = create_playing_wt_synth::<VOICES, LFOS, ENVS, OSCS>(&clock);
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=1,ENVS=8,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<1, 1, 8, 1>);
-    });
+        group
+            .bench_function("Wavetable Synth direct usage", |b| {
+                b.iter(|| {
+                    for _ in 0..BUFFER_SIZE {
+                        synth.tick(&clock);
+                        clock.tick();
+                    }
+                });
+            })
+            .bench_function("Wavetable Synth direct usage (buffer)", |b| {
+                let mut buffer = [Frame::zero(); BUFFER_SIZE];
+                b.iter(|| synth.process_buffer(&clock, &mut buffer));
+            });
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=1,ENVS=16,OSCS=1>", |b| {
-        b.iter(wavetable_synth_1s::<1, 1, 16, 1>);
-    });
+        let mut daw = Daw::<1, 1, 0>::new(SAMPLE_RATE);
+        daw.rack_mut()
+            .push_instrument(Box::new(create_basic_wavetable_synth::<
+                VOICES,
+                LFOS,
+                ENVS,
+                OSCS,
+            >(SAMPLE_RATE)))
+            .unwrap();
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=1,ENVS=1,OSCS=8>", |b| {
-        b.iter(wavetable_synth_1s::<1, 1, 1, 8>);
-    });
+        daw.note_on(paw::midi::note::Note::A0, UnitInterval::MAX);
 
-    c.bench_function("wavetable_synth_1s<VOICES=1,LFOS=1,ENVS=1,OSCS=16>", |b| {
-        b.iter(wavetable_synth_1s::<1, 1, 1, 16>);
-    });
+        group
+            .bench_function("DAW abstraction", |b| {
+                b.iter(|| {
+                    for _ in 0..BUFFER_SIZE {
+                        daw.tick_internal();
+                    }
+                });
+            })
+            .bench_function("DAW abstraction (buffer)", |b| {
+                let mut buffer = [Frame::zero(); BUFFER_SIZE];
+                b.iter(|| {
+                    daw.process_buffer(&mut buffer);
+                });
+            });
+    }
+
+    {
+        let mut group = c.benchmark_group("Buffer processing vs sample-by-sample");
+
+        const VOICES: usize = 16;
+        const LFOS: usize = 4;
+        const ENVS: usize = 4;
+        const OSCS: usize = 4;
+
+        let mut daw = Daw::<1, 1, 0>::new(SAMPLE_RATE);
+
+        daw.rack_mut()
+            .push_instrument(Box::new(create_basic_wavetable_synth::<
+                VOICES,
+                LFOS,
+                ENVS,
+                OSCS,
+            >(SAMPLE_RATE)))
+            .unwrap();
+
+        daw.note_on(paw::midi::note::Note::A0, UnitInterval::MAX);
+
+        for p in 7..=12 {
+            let size = 2usize.pow(p);
+
+            group
+                .throughput(criterion::Throughput::Elements(size as u64))
+                .bench_with_input(
+                    BenchmarkId::new("Buffer processing", size),
+                    &size,
+                    |b, &size| {
+                        let mut buffer = vec![Frame::zero(); size];
+                        b.iter(|| {
+                            daw.process_buffer(&mut buffer);
+                        });
+                    },
+                )
+                .bench_with_input(
+                    BenchmarkId::new("Sample-by-sample", size),
+                    &size,
+                    |b, &size| {
+                        b.iter(|| {
+                            for _ in 0..size {
+                                daw.tick_internal();
+                            }
+                        });
+                    },
+                );
+        }
+    }
 }
 
 criterion_group! {
     name = wt;
-    config = Criterion::default().sample_size(1_000);
+    config = Criterion::default().sample_size(500).with_profiler(PProfProfiler::new(50_000, pprof::criterion::Output::Flamegraph(None)));
     targets = bench
 }
 criterion_main!(wt);

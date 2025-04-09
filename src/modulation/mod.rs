@@ -14,17 +14,21 @@ pub trait Modulate {
     fn modulated(&self, f: impl FnMut(ModTarget) -> ModValue) -> Self;
 }
 
-#[inline]
+#[inline(always)]
 pub fn fm(freq: Freq, m: f32) -> Freq {
-    freq * 2f32.powf(m)
+    if m > 0.0 {
+        freq * 2f32.powf(m)
+    } else {
+        freq
+    }
 }
 
-#[inline]
+#[inline(always)]
 pub fn am(output: f32, m: f32) -> f32 {
     output * m.powf(f32::consts::E)
 }
 
-#[inline]
+#[inline(always)]
 pub fn rm(output: f32, m: f32) -> f32 {
     output * m
 }

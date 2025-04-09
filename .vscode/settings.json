@@ -7,6 +7,7 @@
     "detunes",
     "detuning",
     "Egui",
+    "flamegraph",
     "fract",
     "lerp",
     "lfos",
@@ -20,6 +21,7 @@
     "Wavetable"
   ],
   "rust-analyzer.check.allTargets": true,
+  "rust-analyzer.cargo.allTargets": true,
   "rust-analyzer.cargo.features": ["egui"],
   "rust-analyzer.cargo.noDefaultFeatures": true
 }

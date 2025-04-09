@@ -2,13 +2,17 @@ use paw::{
     midi::{event::MidiEventListener, note::Note},
     osc::clock::Clock,
     param::f32::UnitInterval,
-    wavetable::{synth::create_basic_wavetable_synth, WavetableRow},
+    wavetable::synth::create_basic_wavetable_synth,
 };
 use plotters::{
     chart::ChartBuilder,
-    prelude::{BitMapBackend, IntoDrawingArea, SVGBackend},
+    prelude::{IntoDrawingArea, SVGBackend},
     series::LineSeries,
     style::{IntoFont, BLUE, WHITE},
+};
+use std::{
+    env::{temp_dir, var},
+    process::Command,
 };
 
 const OUTPUT_FILE: &str = "./examples/notebook.svg";
@@ -38,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut clock = Clock::zero(SAMPLE_RATE);
 
-    // Large clock tick to see if wave changes over time
+    // // Large clock tick to see if wave changes over time
     // clock.set((WAVE_LENGTH as u32 - 1) * 100_000);
 
     synth.note_on(&clock, NOTE, UnitInterval::MAX);
@@ -54,7 +58,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     root.present()?;
 
-    // std::fs::File::open(OUTPUT_FILE).unwrap();
+    let _ = var("EDITOR").or(var("VISUAL")).map(|editor| {
+        let mut path = temp_dir();
+        path.push(OUTPUT_FILE);
+        Command::new(editor)
+            .arg(&path)
+            .status()
+            .expect("Something went wrong");
+    });
 
     Ok(())
 }

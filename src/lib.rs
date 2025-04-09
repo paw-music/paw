@@ -21,3 +21,4 @@ pub mod sample;
 pub mod synth;
 pub mod voice;
 pub mod wavetable;
+pub mod export;

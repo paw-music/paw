@@ -3,7 +3,7 @@ use crate::{
     modulation::{am, fm, rm, ModValue, Modulate},
     param::f32::UnitInterval,
 };
-use clock::{Clock, Freq};
+use clock::{Clock, Freq, Tick};
 
 pub mod clock;
 
@@ -33,10 +33,10 @@ pub enum OscMod {
 
 /// The properties of oscillator component. Global for all oscillator instances.
 #[derive(Clone, Copy)]
-pub struct OscProps<'a, O: Osc, const OSCS: usize> {
+pub struct OpProps<'a, O: Osc, const OSCS: usize> {
     index: usize,
     enabled: bool,
-    kind: O::Props<'a>,
+    osc: O::Props<'a>,
     output: OscOutput,
     // TODO: Mix (better balanced between oscs)
     // TODO: Tuning
@@ -45,8 +45,8 @@ pub struct OscProps<'a, O: Osc, const OSCS: usize> {
 }
 
 #[cfg(feature = "egui")]
-impl<'a, O: Osc, const OSCS: usize> crate::param::ui::EguiComponent for OscProps<'a, O, OSCS> {
-    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+impl<'a, O: Osc, const OSCS: usize> crate::param::ui::EguiComponent for OpProps<'a, O, OSCS> {
+    fn egui(&mut self, ui: &mut egui::Ui, _params: crate::param::ui::DefaultUiParams) {
         ui.checkbox(&mut self.enabled, &format!("OSC{} enabled", self.index));
 
         if !self.enabled {
@@ -99,21 +99,22 @@ impl<'a, O: Osc, const OSCS: usize> crate::param::ui::EguiComponent for OscProps
     }
 }
 
-impl<'a, O: Osc, const OSCS: usize> Modulate for OscProps<'a, O, OSCS> {
+impl<'a, O: Osc, const OSCS: usize> Modulate for OpProps<'a, O, OSCS> {
+    #[inline]
     fn modulated(&self, f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue) -> Self {
         Self {
-            kind: self.kind.modulated(f),
+            osc: self.osc.modulated(f),
             ..*self
         }
     }
 }
 
-impl<'a, O: Osc, const OSCS: usize> OscProps<'a, O, OSCS> {
+impl<'a, O: Osc, const OSCS: usize> OpProps<'a, O, OSCS> {
     pub fn new(index: usize, osc: O::Props<'a>) -> Self {
         Self {
             index,
             enabled: index == 0,
-            kind: osc,
+            osc,
             output: OscOutput::Direct,
             tune_semitones: 0,
             tune_cents: 0,
@@ -122,12 +123,12 @@ impl<'a, O: Osc, const OSCS: usize> OscProps<'a, O, OSCS> {
 
     #[inline]
     pub fn kind_mut(&mut self) -> &mut O::Props<'a> {
-        &mut self.kind
+        &mut self.osc
     }
 }
 
 pub struct OscParams<'a, O: Osc, const OSCS: usize> {
-    pub props: OscProps<'a, O, OSCS>,
+    pub props: OpProps<'a, O, OSCS>,
     pub pitch_mod: ModValue,
 }
 
@@ -142,17 +143,32 @@ impl<'a, O: Osc, const OSCS: usize> OscParams<'a, O, OSCS> {
 
 // The state of a single oscillator
 #[derive(Debug, Clone, Copy)]
-pub struct OscState {
-    last_cycle: u32,
+pub struct OpState {
+    last_cycle: Tick,
+    last_freq: Freq,
+    // min_phase_step: f32,
+    phase_step: f32,
+}
+
+impl OpState {
+    #[inline]
+    fn update(&mut self, clock: &Clock, freq: Freq) {
+        if self.last_freq != freq {
+            self.last_freq = freq;
+            self.phase_step = freq.inner() / clock.sample_rate as f32;
+        }
+    }
 }
 
 // TODO: Pitch + Fine pitch, Syncing between oscillators (now synced through reset call), osc mix
-pub struct OscPack<O: Osc, const OSCS: usize> {
+#[derive(Clone)]
+pub struct OperatorPack<O: Osc, const OSCS: usize> {
     oscs: [O; OSCS],
-    states: [OscState; OSCS],
+    states: [OpState; OSCS],
 }
 
-impl<O: Osc, const OSCS: usize> MidiEventListener for OscPack<O, OSCS> {
+impl<O: Osc, const OSCS: usize> MidiEventListener for OperatorPack<O, OSCS> {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = clock;
         let _ = note;
@@ -162,6 +178,7 @@ impl<O: Osc, const OSCS: usize> MidiEventListener for OscPack<O, OSCS> {
             .for_each(|state| state.last_cycle = 0);
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         let _ = clock;
         let _ = note;
@@ -169,12 +186,15 @@ impl<O: Osc, const OSCS: usize> MidiEventListener for OscPack<O, OSCS> {
     }
 }
 
-impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
+impl<O: Osc + 'static, const OSCS: usize> OperatorPack<O, OSCS> {
+    #[inline]
     pub fn new(osc: impl Fn(usize) -> O) -> Self {
         Self {
             oscs: core::array::from_fn(osc),
-            states: core::array::from_fn(|_| OscState {
+            states: core::array::from_fn(|_| OpState {
                 last_cycle: 0,
+                last_freq: Freq::ZERO,
+                phase_step: 0.0,
                 // freq: 0.0,
             }),
         }
@@ -186,9 +206,8 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
         clock: &Clock,
         freq: Freq,
         params: &[OscParams<'a, O, OSCS>],
-    ) -> Option<f32> {
-        let (_, output) = self
-            .oscs
+    ) -> f32 {
+        self.oscs
             .iter_mut()
             .zip(params)
             .zip(self.states.iter_mut())
@@ -196,6 +215,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
                 (OscMod::Direct(0.0), 0.0),
                 |(modulation, mix), ((osc, params), state)| {
                     if !params.props.enabled {
+                        // TODO: Why so? Modulation from previous enabled oscillator should be passed?
                         return (OscMod::None, mix);
                     }
 
@@ -206,9 +226,10 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
 
                     let freq = fm(freq, params.tune_mod() + osc_fm);
 
-                    let phase = clock.phase(freq, &mut state.last_cycle);
+                    state.update(clock, freq);
+                    let phase = clock.phase_fast(state.phase_step, &mut state.last_cycle);
 
-                    let output = osc.tick(phase, &params.props.kind);
+                    let output = osc.tick(phase, &params.props.osc);
 
                     let output = match modulation {
                         OscMod::AM(m) => am(output, m),
@@ -234,8 +255,7 @@ impl<O: Osc + 'static, const OSCS: usize> OscPack<O, OSCS> {
                         mix,
                     )
                 },
-            );
-
-        Some(output)
+            )
+            .1
     }
 }

@@ -12,7 +12,7 @@ use crate::{
 //     WtPos(usize),
 // }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnvProps {
     pub index: usize,
     pub enabled: bool,
@@ -101,6 +101,7 @@ impl EnvProps {
         }
     }
 
+    #[inline]
     fn attack_endpoint(&self, velocity: f32) -> f32 {
         if !self.decay.is_zero() {
             velocity
@@ -144,6 +145,7 @@ impl EnvProps {
         None
     }
 
+    #[inline]
     fn after_sustain(&self, pos: u32) -> Option<f32> {
         if pos <= self.release.inner() {
             Some((1.0 - pos as f32 / self.release.inner() as f32) * self.sustain.inner())
@@ -153,6 +155,7 @@ impl EnvProps {
     }
 }
 
+#[derive(Clone, Copy)]
 enum EnvState {
     Idle,
     NoteOn {
@@ -164,11 +167,13 @@ enum EnvState {
     },
 }
 
+#[derive(Clone)]
 pub struct Env {
     state: EnvState,
 }
 
 impl MidiEventListener for Env {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, _note: crate::midi::note::Note, velocity: UnitInterval) {
         self.state = EnvState::NoteOn {
             velocity,
@@ -176,6 +181,7 @@ impl MidiEventListener for Env {
         }
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, _note: crate::midi::note::Note, _velocity: UnitInterval) {
         self.state = EnvState::NoteOff {
             at_tick: clock.tick,
@@ -190,6 +196,7 @@ impl Env {
         }
     }
 
+    #[inline]
     pub fn tick(&mut self, clock: &Clock, params: &EnvProps) -> Option<UnitInterval> {
         if !params.enabled {
             return None;
@@ -213,17 +220,20 @@ impl Env {
     }
 }
 
+#[derive(Clone)]
 pub struct EnvPack<const SIZE: usize> {
     envs: [Env; SIZE],
 }
 
 impl<const SIZE: usize> MidiEventListener for EnvPack<SIZE> {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.envs
             .iter_mut()
             .for_each(|env| env.note_on(clock, note, velocity));
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.envs
             .iter_mut()
@@ -238,13 +248,14 @@ impl<const SIZE: usize> EnvPack<SIZE> {
         }
     }
 
+    #[inline]
     pub fn tick(
         &mut self,
         clock: &Clock,
         target: ModTarget,
         params: &[EnvProps],
     ) -> Option<UnitInterval> {
-        debug_assert_eq!(params.len(), self.envs.len());
+        // debug_assert_eq!(params.len(), self.envs.len());
 
         params
             .iter()

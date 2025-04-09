@@ -12,20 +12,47 @@ num-derive = "0.4.2"
 num-traits = {version = "0.2.19", default-features = false}
 static_assertions = "1.1.0"
 
-[features]
-egui = ["dep:egui"]
-std = []
-
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = {version = "0.5.1"}
 nannou = "0.19.0"
 nannou_audio = "0.19.0"
 nannou_egui = "0.19.0"
 plotters = "0.3.7"
+pprof = {version = "0.14.0", default-features = false, features = ["criterion", "flamegraph"]}
+rand = "0.9.0"
+
+[features]
+egui = ["dep:egui"]
+std = []
 
 [[bench]]
 harness = false
 name = "wt"
+debug = 2
+profile = "bench"
+
+[[bench]]
+harness = false
+name = "common"
+debug = 2
+profile = "bench"
+
+[profile.profiling]
+inherits = "release"
+debug = 'full'
+lto = 'fat'
+codegen-units = 1
+
+[profile.bench]
+debug = 'full'
+opt-level = 3
+lto = 'fat'
+codegen-units = 1
+
+[profile.release]
+# debug = 1
+lto = 'fat'
+codegen-units = 1
 
 # [[bench]]
 # harness = false

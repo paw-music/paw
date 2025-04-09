@@ -104,6 +104,7 @@ enum Polyphony<const MAX_VOICES: usize> {
 
 // FIXME: Not right
 impl<const MAX_VOICES: usize> PartialEq for Polyphony<MAX_VOICES> {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Poly { .. }, Self::Poly { .. }) | (Self::Unison { .. }, Self::Unison { .. }) => {
@@ -129,6 +130,7 @@ pub enum NotePriority {
     OnlyFree,
 }
 
+#[derive(Clone)]
 pub struct VoicesController<
     O: Osc,
     const VOICES: usize,
@@ -331,6 +333,7 @@ impl<
         }
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: Note, velocity: UnitInterval) {
         let _ = velocity;
 
@@ -404,16 +407,14 @@ impl<
     //         })
     // }
 
-    pub fn tick<'a>(&mut self, clock: &Clock, params: &VoiceParams<'a, O, OSCS>) -> Frame {
-        let sample = (0..VOICES)
+    #[inline]
+    pub fn tick<'a>(&mut self, clock: &Clock, params: VoiceParams<'a, O, OSCS>) -> Frame {
+        (0..VOICES)
             .map(|index| {
                 self.voices[index]
-                    .tick(clock, params)
-                    .map(|frame| frame.map(|sample| *sample / VOICES as f32))
-                    .unwrap_or(Frame::zero())
+                    .tick(clock, &params)
+                    .map(|sample| *sample / VOICES as f32)
             })
-            .sum();
-
-        sample
+            .sum()
     }
 }

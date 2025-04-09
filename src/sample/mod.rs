@@ -28,12 +28,14 @@ pub trait Sample: Copy + Add<Self, Output = Self> + Sub<Self, Output = Self> + S
 }
 
 impl Sample for u16 {
+    #[inline]
     fn lerp(self, to: Self, num: u32, denom: u32) -> Self {
         let from = self as i32;
 
         (from + (((to as i32) - from) * (num as i32)) / (denom as i32)) as u16
     }
 
+    #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
         self.saturating_add(other)
     }
@@ -42,24 +44,29 @@ impl Sample for u16 {
     //     ((self as f32) - (Self::MAX as f32)) / (Self::MAX as f32)
     // }
 
+    #[inline]
     fn to_sui(self) -> SignedUnitInterval {
         SignedUnitInterval::new_checked((self as f32 - Self::MAX as f32) / Self::MAX as f32)
     }
 
+    #[inline]
     fn zero() -> Self {
         0
     }
 
+    #[inline]
     fn amp(self, amp: f32) -> Self {
         // TODO: Is this right or amp can be negative and greater than 1.0?
         debug_assert!(amp >= 0.0 && amp <= 1.0);
         (self as f32 * amp / Self::MAX as f32) as Self
     }
 
+    #[inline]
     fn max(self, other: Self) -> Self {
         Ord::max(self, other)
     }
 
+    #[inline]
     fn fold_mean(self, prev_mean: Self, index: usize) -> Self {
         // FIXME: subtract overflow issue
         prev_mean + (self - prev_mean) / (index as u16 + 1)
@@ -67,10 +74,12 @@ impl Sample for u16 {
 }
 
 impl Sample for f32 {
+    #[inline]
     fn lerp(self, to: Self, num: u32, denom: u32) -> Self {
         self + ((to - self) * (num as f32)) / (denom as f32)
     }
 
+    #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
         // TODO: Clip or not to clip?
         self + other
@@ -80,56 +89,62 @@ impl Sample for f32 {
     //     self
     // }
 
+    #[inline]
     fn to_sui(self) -> SignedUnitInterval {
         SignedUnitInterval::new(self)
     }
 
+    #[inline(always)]
     fn zero() -> Self {
         0.0
     }
 
+    #[inline]
     fn amp(self, amp: f32) -> Self {
         self * amp
     }
 
+    #[inline]
     fn max(self, other: Self) -> Self {
         f32::max(self, other)
     }
 
+    #[inline]
     fn fold_mean(self, prev_mean: Self, index: usize) -> Self {
         prev_mean + (self - prev_mean) / (index as f32 + 1.0)
     }
 }
 
-impl Sample for SignedUnitInterval {
-    fn lerp(self, to: Self, num: u32, denom: u32) -> Self {
-        Self::new(self.inner().lerp(to.inner(), num, denom))
-    }
+// impl Sample for SignedUnitInterval {
+//     #[inline]
+//     fn lerp(self, to: Self, num: u32, denom: u32) -> Self {
+//         Self::new(self.inner().lerp(to.inner(), num, denom))
+//     }
 
-    fn saturating_add(self, other: Self) -> Self {
-        Self::new(self.inner().saturating_add(other.inner()))
-    }
+//     fn saturating_add(self, other: Self) -> Self {
+//         Self::new(self.inner().saturating_add(other.inner()))
+//     }
 
-    fn to_sui(self) -> SignedUnitInterval {
-        self
-    }
+//     fn to_sui(self) -> SignedUnitInterval {
+//         self
+//     }
 
-    fn zero() -> Self {
-        Self::EQUILIBRIUM
-    }
+//     fn zero() -> Self {
+//         Self::EQUILIBRIUM
+//     }
 
-    fn amp(self, amp: f32) -> Self {
-        self * amp
-    }
+//     fn amp(self, amp: f32) -> Self {
+//         self * amp
+//     }
 
-    fn max(self, other: Self) -> Self {
-        Self::new(self.inner().max(other.inner()))
-    }
+//     fn max(self, other: Self) -> Self {
+//         Self::new(self.inner().max(other.inner()))
+//     }
 
-    fn fold_mean(self, prev_mean: Self, index: usize) -> Self {
-        prev_mean + (self - prev_mean) / (index as f32 + 1.0)
-    }
-}
+//     fn fold_mean(self, prev_mean: Self, index: usize) -> Self {
+//         prev_mean + (self - prev_mean) / (index as f32 + 1.0)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

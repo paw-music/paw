@@ -1,13 +1,11 @@
-use core::f32::EPSILON;
-
+use super::mod_pack::ModTarget;
 use crate::{
     midi::event::MidiEventListener,
-    osc::clock::{Clock, Freq},
+    osc::clock::{Clock, Freq, Tick},
     param::f32::{SignedUnitInterval, UnitInterval},
 };
+use core::f32::EPSILON;
 use micromath::F32Ext as _;
-
-use super::mod_pack::ModTarget;
 
 // TODO: LUT?
 
@@ -58,7 +56,7 @@ pub struct LfoProps {
 
 #[cfg(feature = "egui")]
 impl crate::param::ui::EguiComponent for LfoProps {
-    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+    fn egui(&mut self, ui: &mut egui::Ui, _params: crate::param::ui::DefaultUiParams) {
         ui.vertical(|ui| {
             crate::param::ui::egui_wave(ui, |x| Lfo::at(x, &self));
 
@@ -129,10 +127,11 @@ impl LfoProps {
 
 // TODO: Delay and rise
 // TODO: Set freq by rate (1/4, 1/2, etc.). Need synth BPM for that
+#[derive(Clone)]
 pub struct Lfo {
     state: bool,
     // phase: f32,
-    last_cycle: u32,
+    last_cycle: Tick,
     // TODO: Start phase?
 }
 
@@ -203,6 +202,7 @@ impl Lfo {
     }
 }
 
+#[derive(Clone)]
 pub struct LfoPack<const SIZE: usize> {
     lfos: [Lfo; SIZE],
 }
@@ -230,6 +230,7 @@ impl<const SIZE: usize> LfoPack<SIZE> {
         }
     }
 
+    #[inline]
     pub fn tick(
         &mut self,
         clock: &Clock,

@@ -2,11 +2,15 @@ use crate::{
     daw::channel_rack::Instrument,
     midi::event::MidiEventListener,
     modulation::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
-    osc::{clock::Clock, Osc, OscParams, OscProps},
+    osc::{
+        clock::Clock,
+        OpProps, Osc, OscParams,
+    },
     sample::Frame,
     voice::{controller::VoicesController, Voice, VoiceParams},
 };
 
+#[derive(Clone)]
 pub struct Synth<
     O: Osc,
     const VOICES: usize,
@@ -20,7 +24,7 @@ pub struct Synth<
     /// Global ADSRs (envelopes) and LFOs
     mods: ModPack<LFOS, ENVS, OSCS>,
 
-    osc_props: [OscProps<'static, O, OSCS>; OSCS],
+    osc_props: [OpProps<'static, O, OSCS>; OSCS],
 
     voices: VoicesController<O, VOICES, LFOS, ENVS, OSCS>,
 }
@@ -114,13 +118,13 @@ impl<
             lfo_props: core::array::from_fn(|index| LfoProps::new(index)),
             env_props: core::array::from_fn(|index| EnvProps::new(index, sample_rate)),
             mods: ModPack::new(),
-            osc_props: core::array::from_fn(|index| OscProps::new(index, osc_props(index))),
+            osc_props: core::array::from_fn(|index| OpProps::new(index, osc_props(index))),
             voices: VoicesController::new(|_| Voice::new(|_| O::default())),
         }
     }
 
     #[inline]
-    pub fn props_mut(&mut self) -> &mut [OscProps<'static, O, OSCS>] {
+    pub fn props_mut(&mut self) -> &mut [OpProps<'static, O, OSCS>] {
         &mut self.osc_props
     }
 
@@ -148,7 +152,7 @@ impl<
 
         let frame = self.voices.tick(
             clock,
-            &VoiceParams {
+            VoiceParams {
                 env_params: &self.env_props,
                 lfo_params: &self.lfo_props,
                 osc_params,

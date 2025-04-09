@@ -20,6 +20,7 @@ impl<T: Sub<Output = T> + Copy, const SIZE: usize> Sub for Frame<T, SIZE> {
 }
 
 impl<T: PartialEq, const SIZE: usize> PartialEq for Frame<T, SIZE> {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.channels.eq(&other.channels)
     }
@@ -33,6 +34,7 @@ impl<T> From<(T, T)> for Frame<T> {
 }
 
 impl<T> Frame<T, 2> {
+    #[inline]
     pub fn new(left: T, right: T) -> Self {
         Self {
             channels: [left, right],

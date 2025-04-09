@@ -36,6 +36,7 @@ impl<const SIZE: usize> From<TrackOutput> for UnmixedOutput<SIZE> {
 impl<const SIZE: usize> Add<TrackOutput> for UnmixedOutput<SIZE> {
     type Output = Self;
 
+    #[inline]
     fn add(mut self, rhs: TrackOutput) -> Self::Output {
         self.tracks[rhs.track] += rhs.output;
         self
@@ -52,12 +53,14 @@ impl<const SIZE: usize> Add for UnmixedOutput<SIZE> {
 }
 
 impl<const SIZE: usize> Sum for UnmixedOutput<SIZE> {
+    #[inline]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Self::zero(), |sum, mo| sum + mo)
     }
 }
 
 impl<const SIZE: usize> UnmixedOutput<SIZE> {
+    #[inline]
     pub fn zero() -> Self {
         Self {
             tracks: [Frame::zero(); SIZE],
@@ -120,11 +123,13 @@ impl<const FX_SLOTS: usize> crate::param::ui::EguiComponent<(usize, Clock)>
 }
 
 impl<const FX_SLOTS: usize> MidiEventListener for MixerTrack<FX_SLOTS> {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.iter_effects_mut()
             .for_each(|fx| fx.note_on(clock, note, velocity));
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.iter_effects_mut()
             .for_each(|fx| fx.note_off(clock, note, velocity));
@@ -144,18 +149,25 @@ impl<const FX_SLOTS: usize> MixerTrack<FX_SLOTS> {
         &mut self.level
     }
 
+    #[inline]
     pub fn iter_effects_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Fx>> {
         self.effects.iter_mut().filter_map(|fx| fx.as_mut())
     }
 
+    #[inline]
     fn mix(&mut self, clock: &Clock, input: Frame) -> Frame {
-        let output = self.effects.iter_mut().fold(input, |input, fx| {
+        self.effects.iter_mut().fold(input, |input, fx| {
             fx.as_mut().map(|fx| fx.tick(clock, input)).unwrap_or(input)
+        }) * self.level.inner()
+    }
+
+    #[inline]
+    fn mix_buffer(&mut self, clock: &Clock, buffer: &mut [Frame]) {
+        self.effects.iter_mut().for_each(|effect| {
+            effect.as_mut().map(|fx| {
+                fx.process_buffer(clock, buffer);
+            });
         });
-
-        let output = output * self.level.inner();
-
-        output
     }
 }
 
@@ -183,12 +195,14 @@ impl<const SIZE: usize, const FX_SLOTS: usize> crate::param::ui::EguiComponent
 }
 
 impl<const SIZE: usize, const FX_SLOTS: usize> MidiEventListener for Mixer<SIZE, FX_SLOTS> {
+    #[inline]
     fn note_on(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.tracks
             .iter_mut()
             .for_each(|track| track.note_on(clock, note, velocity));
     }
 
+    #[inline]
     fn note_off(&mut self, clock: &Clock, note: crate::midi::note::Note, velocity: UnitInterval) {
         self.tracks
             .iter_mut()
@@ -197,16 +211,20 @@ impl<const SIZE: usize, const FX_SLOTS: usize> MidiEventListener for Mixer<SIZE,
 }
 
 impl<const SIZE: usize, const FX_SLOTS: usize> Mixer<SIZE, FX_SLOTS> {
+    #[inline]
     pub const fn new() -> Self {
         Self {
             tracks: [const { MixerTrack::new() }; SIZE],
         }
     }
 
+    #[inline]
     pub fn iter_tracks_mut(&mut self) -> impl Iterator<Item = &mut MixerTrack<FX_SLOTS>> {
         self.tracks.iter_mut()
     }
 
+    // TODO: Master track
+    #[inline]
     pub fn mix(&mut self, clock: &Clock, input: UnmixedOutput<SIZE>) -> Frame {
         self.tracks
             .iter_mut()
@@ -214,5 +232,9 @@ impl<const SIZE: usize, const FX_SLOTS: usize> Mixer<SIZE, FX_SLOTS> {
             .fold(Frame::zero(), |mix, (track, input)| {
                 mix + track.mix(clock, input)
             })
+    }
+
+    pub fn mix_channel_buffer(&mut self, clock: &Clock, track: usize, buffer: &mut [Frame]) {
+        self.tracks[track].mix_buffer(clock, buffer);
     }
 }

@@ -9,24 +9,30 @@ macro_rules! notes {
         }
 
         impl Note {
+            #[inline]
             pub fn each() -> impl Iterator<Item = Note> {
                 const NOTES: [Note; 128] = [$(Note::$name),*];
 
                 NOTES.iter().copied()
             }
 
-            // pub fn from_freq(freq)
-
+            #[inline]
             pub const fn freq(&self) -> crate::osc::clock::Freq {
                 match self {
                     $(Self::$name => crate::osc::clock::Freq::new($freq)),*
                 }
             }
+
+            // TODO: FromPrimitive or don't even use this
+            // pub const fn from_midi(midi_note: u8) -> Self {
+            //     unsafe {core::mem::transmute(midi_note)}
+            // }
         }
     };
 }
 
 impl Note {
+    #[inline]
     pub fn saturating_add(self, transpose: i16) -> Self {
         FromPrimitive::from_i16((self as i16).saturating_add(transpose).clamp(0, 127)).unwrap()
     }
