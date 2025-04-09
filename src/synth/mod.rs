@@ -2,10 +2,7 @@ use crate::{
     daw::channel_rack::Instrument,
     midi::event::MidiEventListener,
     modulation::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
-    osc::{
-        clock::Clock,
-        OpProps, Osc, OscParams,
-    },
+    osc::{clock::Clock, OpProps, Osc, OscParams},
     sample::Frame,
     voice::{controller::VoicesController, Voice, VoiceParams},
 };
@@ -24,7 +21,7 @@ pub struct Synth<
     /// Global ADSRs (envelopes) and LFOs
     mods: ModPack<LFOS, ENVS, OSCS>,
 
-    osc_props: [OpProps<'static, O, OSCS>; OSCS],
+    op_props: [OpProps<'static, O, OSCS>; OSCS],
 
     voices: VoicesController<O, VOICES, LFOS, ENVS, OSCS>,
 }
@@ -37,12 +34,12 @@ impl<
         const OSCS: usize,
     > Instrument for Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
-    #[inline]
+    #[inline(always)]
     fn tick(&mut self, clock: &Clock) -> Frame {
         self.tick(clock)
     }
 
-    #[inline]
+    #[inline(always)]
     fn name(&self) -> &str {
         "Synth"
     }
@@ -118,20 +115,20 @@ impl<
             lfo_props: core::array::from_fn(|index| LfoProps::new(index)),
             env_props: core::array::from_fn(|index| EnvProps::new(index, sample_rate)),
             mods: ModPack::new(),
-            osc_props: core::array::from_fn(|index| OpProps::new(index, osc_props(index))),
+            op_props: core::array::from_fn(|index| OpProps::new(index, osc_props(index))),
             voices: VoicesController::new(|_| Voice::new(|_| O::default())),
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn props_mut(&mut self) -> &mut [OpProps<'static, O, OSCS>] {
-        &mut self.osc_props
+        &mut self.op_props
     }
 
     pub fn tick(&mut self, clock: &Clock) -> Frame {
         // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
         let osc_params = core::array::from_fn(|index| OscParams {
-            props: self.osc_props[index].modulated(|target| {
+            props: self.op_props[index].modulated(|target| {
                 self.mods
                     .tick(clock, target, &self.lfo_props, &self.env_props)
             }),

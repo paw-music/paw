@@ -22,13 +22,13 @@ impl Dist {
     }
 
     pub fn tick(&mut self, input: Frame, params: &DistParams) -> Frame {
-        let input = input.map(|input| *input * params.input.inner());
+        let input = input.map(|input| input * params.input.inner());
 
         let output = match params.kind {
             DistKind::HardClip => {
                 const THRESHOLD: f32 = 0.5;
 
-                input.map(|&input| {
+                input.map(|input| {
                     let input = input;
                     if input > THRESHOLD {
                         THRESHOLD
@@ -43,7 +43,7 @@ impl Dist {
                 const THRESHOLD1: f32 = 1.0 / 3.0;
                 const THRESHOLD2: f32 = 2.0 / 3.0;
 
-                input.map(|&input| {
+                input.map(|input| {
                     0.5 * if input > THRESHOLD2 {
                         1.0
                     } else if input > THRESHOLD1 {
@@ -57,14 +57,14 @@ impl Dist {
                     }
                 })
             }
-            DistKind::Exp => input.map(|&input| {
+            DistKind::Exp => input.map(|input| {
                 if input > 0.0 {
                     1.0 - (-input).exp()
                 } else {
                     -1.0 + input.exp()
                 }
             }),
-            DistKind::HalfWaveRect => input.map(|&input| if input > 0.0 { input } else { 0.0 }),
+            DistKind::HalfWaveRect => input.map(|input| if input > 0.0 { input } else { 0.0 }),
         };
 
         output

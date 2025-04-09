@@ -50,7 +50,7 @@ impl<const SIZE: usize> Delay<SIZE> {
 
         // Write new feedback
         let write = input
-            .zip(feedback, |&input, &feedback| {
+            .zip(feedback, |input, feedback| {
                 (input + feedback) * params.feedback.inner()
             })
             .zip_mut(&mut self.flt, |feedback, flt| flt.process(*feedback));

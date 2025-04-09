@@ -33,15 +33,15 @@ impl<const SIZE: usize> From<TrackOutput> for UnmixedOutput<SIZE> {
     }
 }
 
-impl<const SIZE: usize> Add<TrackOutput> for UnmixedOutput<SIZE> {
-    type Output = Self;
+// impl<const SIZE: usize> Add<TrackOutput> for UnmixedOutput<SIZE> {
+//     type Output = Self;
 
-    #[inline]
-    fn add(mut self, rhs: TrackOutput) -> Self::Output {
-        self.tracks[rhs.track] += rhs.output;
-        self
-    }
-}
+//     #[inline]
+//     fn add(mut self, rhs: TrackOutput) -> Self::Output {
+//         self.tracks[rhs.track] += rhs.output;
+//         self
+//     }
+// }
 
 impl<const SIZE: usize> Add for UnmixedOutput<SIZE> {
     type Output = Self;

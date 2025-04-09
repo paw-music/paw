@@ -97,6 +97,6 @@ impl<O: Osc + 'static, const LFOS: usize, const ENVS: usize, const OSCS: usize>
 
         let sample = self.ops.tick(clock, freq, &params.osc_params) * amp.inner();
 
-        Frame::equal(sample).stereo_balanced(self.stereo_balance)
+        Frame::mono(sample).stereo_balanced(self.stereo_balance)
     }
 }

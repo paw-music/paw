@@ -1,5 +1,6 @@
 use micromath::F32Ext as _;
 
+#[derive(Clone, Copy)]
 pub struct OnePole {
     a0: f32,
     b1: f32,

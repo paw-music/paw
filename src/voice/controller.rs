@@ -413,7 +413,7 @@ impl<
             .map(|index| {
                 self.voices[index]
                     .tick(clock, &params)
-                    .map(|sample| *sample / VOICES as f32)
+                    .map(|sample| sample / VOICES as f32)
             })
             .sum()
     }

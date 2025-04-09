@@ -10,12 +10,10 @@ pub struct Frame<T = f32, const SIZE: usize = 2> {
     channels: [T; SIZE],
 }
 
-impl<T: Sub<Output = T> + Copy, const SIZE: usize> Sub for Frame<T, SIZE> {
-    type Output = Self;
-
+impl<T, const SIZE: usize> Frame<T, SIZE> {
     #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.zip(rhs, |lhs, rhs| *lhs - *rhs)
+    pub fn new(channels: [T; SIZE]) -> Self {
+        Self { channels }
     }
 }
 
@@ -26,25 +24,32 @@ impl<T: PartialEq, const SIZE: usize> PartialEq for Frame<T, SIZE> {
     }
 }
 
-impl<T> From<(T, T)> for Frame<T> {
+impl<T: Copy> From<(T, T)> for Frame<T> {
     #[inline]
     fn from(value: (T, T)) -> Self {
-        Self::new(value.0, value.1)
+        Self::stereo(value.0, value.1)
     }
 }
 
-impl<T> Frame<T, 2> {
+impl<T: Copy> Frame<T, 2> {
     #[inline]
-    pub fn new(left: T, right: T) -> Self {
+    pub fn stereo(left: T, right: T) -> Self {
         Self {
             channels: [left, right],
         }
     }
 
     #[inline]
+    pub fn mono(mono: T) -> Self {
+        Self {
+            channels: [mono, mono],
+        }
+    }
+
+    #[inline]
     pub fn swapped(self) -> Self {
         let [left, right] = self.channels;
-        Self::new(right, left)
+        Self::stereo(right, left)
     }
 
     #[inline]
@@ -73,8 +78,8 @@ impl Frame<f32, 2> {
     pub fn stereo_balanced(&self, balance: UnitInterval) -> Self {
         Self {
             channels: [
-                self.channels[0] * (1.0 - balance.inner()),
-                self.channels[1] * balance.inner(),
+                self.channels[0] * balance.inner(),
+                self.channels[1] * (1.0 - balance.inner()),
             ],
         }
     }
@@ -83,7 +88,7 @@ impl Frame<f32, 2> {
 impl<T: Copy, const SIZE: usize> Frame<[T; SIZE], 2> {
     #[inline]
     pub fn at(&self, index: usize) -> Frame<T, 2> {
-        Frame::new(self.left()[index], self.right()[index])
+        Frame::stereo(self.left()[index], self.right()[index])
     }
 
     #[inline]
@@ -99,7 +104,7 @@ impl<T: Mul<Output = T> + Copy, const SIZE: usize> Mul for Frame<T, SIZE> {
 
     #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
-        self.zip(rhs, |lhs, rhs| *lhs * *rhs)
+        self.zip(rhs, |lhs, rhs| lhs * rhs)
     }
 }
 
@@ -108,7 +113,7 @@ impl<T: Mul<Output = T> + Copy, const SIZE: usize> Mul<T> for Frame<T, SIZE> {
 
     #[inline]
     fn mul(self, rhs: T) -> Self::Output {
-        self.map(|val| *val * rhs)
+        self.map(|val| val * rhs)
     }
 }
 
@@ -117,7 +122,7 @@ impl<T: Div<Output = T> + Copy, const SIZE: usize> Div for Frame<T, SIZE> {
 
     #[inline]
     fn div(self, rhs: Self) -> Self::Output {
-        self.zip(rhs, |lhs, rhs| *lhs / *rhs)
+        self.zip(rhs, |lhs, rhs| lhs / rhs)
     }
 }
 
@@ -126,19 +131,28 @@ impl<T: Add<Output = T> + Copy, const SIZE: usize> Add for Frame<T, SIZE> {
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        self.zip(rhs, |lhs, rhs| *lhs + *rhs)
+        self.zip(rhs, |lhs, rhs| lhs + rhs)
     }
 }
 
-impl<T: Add<Output = T> + Copy, const SIZE: usize> AddAssign for Frame<T, SIZE> {
+impl<T: Sub<Output = T> + Copy, const SIZE: usize> Sub for Frame<T, SIZE> {
+    type Output = Self;
+
     #[inline]
-    fn add_assign(&mut self, rhs: Self) {
-        self.channels
-            .iter_mut()
-            .zip(rhs.channels)
-            .for_each(|(this, rhs)| *this = *this + rhs);
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.zip(rhs, |lhs, rhs| lhs - rhs)
     }
 }
+
+// impl<T: Add<Output = T> + Copy, const SIZE: usize> AddAssign for Frame<T, SIZE> {
+//     #[inline]
+//     fn add_assign(&mut self, rhs: Self) {
+//         self.channels
+//             .iter_mut()
+//             .zip(rhs.channels)
+//             .for_each(|(this, rhs)| *this = *this + rhs);
+//     }
+// }
 
 impl<T: Sample, const SIZE: usize> IntoIterator for Frame<T, SIZE> {
     type Item = T;
@@ -165,7 +179,7 @@ impl<T: Sample, const SIZE: usize> Frame<T, SIZE> {
     }
 }
 
-impl<T, const SIZE: usize> Frame<T, SIZE> {
+impl<T: Copy, const SIZE: usize> Frame<T, SIZE> {
     #[inline]
     pub fn from_fn(f: impl FnMut(usize) -> T) -> Self {
         Self {
@@ -178,21 +192,25 @@ impl<T, const SIZE: usize> Frame<T, SIZE> {
     where
         T: Copy,
     {
-        Self::from_fn(|_| value)
+        Self::new([value; SIZE])
     }
 
     #[inline]
-    pub fn map<U>(&self, f: impl Fn(&T) -> U) -> Frame<U, SIZE> {
-        Frame::from_fn(|index| f(&self.channels[index]))
+    pub fn map<U: Copy>(&self, f: impl Fn(T) -> U) -> Frame<U, SIZE> {
+        Frame::from_fn(|index| f(self.channels[index]))
     }
 
     #[inline]
-    pub fn zip<U, O>(&self, other: Frame<U, SIZE>, f: impl Fn(&T, &U) -> O) -> Frame<O, SIZE> {
-        Frame::from_fn(|index| f(&self.channels[index], &other.channels[index]))
+    pub fn zip<U: Copy, O: Copy>(
+        &self,
+        other: Frame<U, SIZE>,
+        f: impl Fn(T, U) -> O,
+    ) -> Frame<O, SIZE> {
+        Frame::from_fn(|index| f(self.channels[index], other.channels[index]))
     }
 
     #[inline]
-    pub fn zip_mut<U, O>(
+    pub fn zip_mut<U: Copy, O: Copy>(
         &mut self,
         other: &mut Frame<U, SIZE>,
         mut f: impl FnMut(&mut T, &mut U) -> O,
