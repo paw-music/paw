@@ -11,10 +11,10 @@ pub mod lfo;
 pub mod mod_pack;
 
 pub trait Modulate {
-    fn modulated(&self, f: impl FnMut(ModTarget) -> ModValue) -> Self;
+    fn modulated(&self, f: impl FnMut(ModTarget) -> Option<ModValue>) -> Self;
 }
 
-#[inline(always)]
+#[inline]
 pub fn fm(freq: Freq, m: f32) -> Freq {
     if m > 0.0 {
         freq * 2f32.powf(m)
@@ -23,21 +23,21 @@ pub fn fm(freq: Freq, m: f32) -> Freq {
     }
 }
 
-#[inline(always)]
+#[inline]
 pub fn am(output: f32, m: f32) -> f32 {
     output * m.powf(f32::consts::E)
 }
 
-#[inline(always)]
+#[inline]
 pub fn rm(output: f32, m: f32) -> f32 {
     output * m
 }
 
 /// Modulation with known source, this is now only used to distinguish envelope modulation from others, because envelope modulation is defining whereas others are additive or multiplying
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ModValue {
-    #[default]
-    None,
+    // #[default]
+    // None,
     Env(UnitInterval),
     Lfo(SignedUnitInterval),
     // // Generic UnitInterval
@@ -48,7 +48,7 @@ impl ModValue {
     #[inline]
     pub fn as_ui(&self) -> UnitInterval {
         match self {
-            ModValue::None => UnitInterval::MIN,
+            // ModValue::None => UnitInterval::MIN,
             ModValue::Env(env) => *env,
             ModValue::Lfo(lfo) => lfo.remap_into_ui(),
         }
@@ -57,7 +57,7 @@ impl ModValue {
     #[inline]
     pub fn as_sui(&self) -> SignedUnitInterval {
         match self {
-            ModValue::None => SignedUnitInterval::EQUILIBRIUM,
+            // ModValue::None => SignedUnitInterval::EQUILIBRIUM,
             ModValue::Env(env) => env.remap_into_signed(),
             ModValue::Lfo(lfo) => *lfo,
         }
@@ -65,23 +65,23 @@ impl ModValue {
 
     // pub fn or(self, other: Self)
 
-    #[inline]
-    pub const fn env(value: Option<UnitInterval>) -> Self {
-        if let Some(value) = value {
-            Self::Env(value)
-        } else {
-            Self::None
-        }
-    }
+    // #[inline]
+    // pub const fn env(value: Option<UnitInterval>) -> Self {
+    //     if let Some(value) = value {
+    //         Self::Env(value)
+    //     } else {
+    //         Self::None
+    //     }
+    // }
 
-    #[inline]
-    pub const fn lfo(value: Option<SignedUnitInterval>) -> Self {
-        if let Some(value) = value {
-            Self::Lfo(value)
-        } else {
-            Self::None
-        }
-    }
+    // #[inline]
+    // pub const fn lfo(value: Option<SignedUnitInterval>) -> Self {
+    //     if let Some(value) = value {
+    //         Self::Lfo(value)
+    //     } else {
+    //         Self::None
+    //     }
+    // }
 }
 
 // impl ModValue {

@@ -22,8 +22,6 @@ impl<const DEPTH: usize, const LENGTH: usize> Osc for WavetableOsc<DEPTH, LENGTH
 
     #[inline(always)]
     fn tick<'a>(&mut self, phase: f32, params: &Self::Props<'a>) -> f32 {
-        let sample = params.lerp(phase);
-
-        sample
+        params.lerp(phase)
     }
 }

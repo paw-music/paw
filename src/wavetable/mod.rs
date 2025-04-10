@@ -1,9 +1,8 @@
 use crate::{
     modulation::{ModValue, Modulate},
     param::f32::SignedUnitInterval,
-    sample::Sample,
 };
-use micromath::F32Ext as _;
+use micromath::F32Ext;
 use num::Zero;
 
 pub mod osc;
@@ -12,6 +11,9 @@ pub mod synth;
 // /// The minimum amount of deviation from integer for lerp to be applied to neighbor samples
 // pub const WAVETABLE_LERP_DELTA_THRESHOLD: f32 = 0.001;
 
+pub const WAVETABLE_DEPTH_LERP_THRESHOLD: f32 = 0.001;
+
+// /// Note: Static assertions are impossible in current stable to check LENGTH. LENGTH MUST BE a power of two for modulo optimization
 #[derive(Debug)]
 pub struct WavetableRow<const LENGTH: usize> {
     samples: [f32; LENGTH],
@@ -31,13 +33,15 @@ impl<const LENGTH: usize> WavetableRow<LENGTH> {
 impl<const LENGTH: usize> WavetableRow<LENGTH> {
     #[inline]
     pub fn lerp(&self, phase: f32) -> f32 {
-        // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
-
         // FIXME: phase of 1.0 * LENGTH is max size, but phase is never 1.0, will it happen?
-        let left_index = (phase * LENGTH as f32) as usize % LENGTH;
+        let index = phase * LENGTH as f32;
+        let left_index = index as usize;
+        // // Note: Modulo optimization, x % LENGTH == x % (LENGTH - 1) for LENGTH being a power of two
+        // let right_index = (left_index + 1) & (LENGTH - 1);
+
         let right_index = (left_index + 1) % LENGTH;
 
-        let right_index_factor = phase.fract();
+        let right_index_factor = index.fract();
         let left_index_factor = 1.0 - right_index_factor;
 
         // if right_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
@@ -45,12 +49,9 @@ impl<const LENGTH: usize> WavetableRow<LENGTH> {
         // } else if left_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
         //     self.samples[left_index]
         // } else {
-        self.samples[left_index].amp(left_index_factor)
-            + self.samples[right_index].amp(right_index_factor)
+        self.samples[left_index] * left_index_factor
+            + self.samples[right_index] * right_index_factor
         // }
-
-        // self.samples[left_index]
-        //     + phase.fract() * (self.samples[right_index] - self.samples[left_index])
     }
 }
 
@@ -64,13 +65,11 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
         Self { rows }
     }
 
+    /// Depth MUST BE in bounds
     #[inline(always)]
     pub fn at(&self, depth: usize, phase: f32) -> f32 {
         // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
-
-        let row = &self.rows[depth % DEPTH];
-
-        row.lerp(phase)
+        unsafe { self.rows.get_unchecked(depth).lerp(phase) }
     }
 }
 
@@ -88,27 +87,37 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct WavetableProps<'a, const DEPTH: usize, const LENGTH: usize> {
-    pub osc_index: usize,
-    pub wavetable: &'a Wavetable<DEPTH, LENGTH>,
-    pub depth: usize,
-    pub depth_offset: SignedUnitInterval,
+    osc_index: usize,
+    wavetable: &'a Wavetable<DEPTH, LENGTH>,
+    depth: usize,
+    depth_lerp: Option<(f32, f32)>,
 }
 
 impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a, DEPTH, LENGTH> {
     #[inline]
     fn modulated(
         &self,
-        mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue,
+        mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<ModValue>,
     ) -> Self {
-        let depth_offset = self.depth_offset
-            + f(crate::modulation::mod_pack::ModTarget::OscWtPos(
-                self.osc_index,
-            ))
-            .as_sui();
+        if let Some(depth_mod) = f(crate::modulation::mod_pack::ModTarget::OscWtPos(
+            self.osc_index,
+        )) {
+            let depth_offset = depth_mod.as_sui();
 
-        Self {
-            depth_offset,
-            ..*self
+            let depth = (DEPTH as f32 + self.depth as f32 + DEPTH as f32 * depth_offset.inner())
+                % DEPTH as f32;
+            let left_depth = depth as usize;
+
+            let right_depth_factor = depth.fract();
+            let left_depth_factor = 1.0 - right_depth_factor;
+
+            Self {
+                depth: left_depth,
+                depth_lerp: Some((left_depth_factor, right_depth_factor)),
+                ..*self
+            }
+        } else {
+            *self
         }
     }
 }
@@ -117,7 +126,7 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a
 impl<'a, const DEPTH: usize, const LENGTH: usize> crate::param::ui::EguiComponent
     for WavetableProps<'a, DEPTH, LENGTH>
 {
-    fn egui(&mut self, ui: &mut egui::Ui, params: crate::param::ui::DefaultUiParams) {
+    fn egui(&mut self, ui: &mut egui::Ui, _params: crate::param::ui::DefaultUiParams) {
         crate::param::ui::egui_wave(ui, |x| self.lerp(x));
 
         ui.add(
@@ -138,38 +147,17 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENG
             osc_index,
             wavetable,
             depth: 0,
-            depth_offset: SignedUnitInterval::EQUILIBRIUM,
-        }
-    }
-
-    #[inline]
-    pub fn modulated_depth(&self) -> f32 {
-        let depth_offset = self.depth_offset.inner();
-        if depth_offset.is_zero() {
-            self.depth as f32
-        } else {
-            (DEPTH as f32 + self.depth as f32 + DEPTH as f32 * depth_offset) % DEPTH as f32
+            depth_lerp: None,
         }
     }
 
     #[inline]
     pub fn lerp(&self, phase: f32) -> f32 {
-        let depth = self.modulated_depth();
-
-        let left_depth = depth as usize;
-
-        // Note: Integer depth optimization
-        // TODO: Should be is_zero or approx with small number?
-        if depth.fract().is_zero() {
-            self.wavetable.at(left_depth, phase)
+        if let Some((left_depth_factor, right_depth_factor)) = self.depth_lerp {
+            self.wavetable.at(self.depth, phase) * left_depth_factor
+                + self.wavetable.at((self.depth + 1) % DEPTH, phase) * right_depth_factor
         } else {
-            let right_depth = (left_depth + 1) % DEPTH;
-
-            let right_depth_factor = depth.fract();
-            let left_depth_factor = 1.0 - right_depth_factor;
-
-            self.wavetable.at(left_depth, phase) * left_depth_factor
-                + self.wavetable.at(right_depth, phase) * right_depth_factor
+            self.wavetable.at(self.depth, phase)
         }
     }
 

@@ -87,14 +87,13 @@ impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> ModPack<LFOS, ENVS
         }
     }
 
-    #[inline]
     pub fn tick(
         &mut self,
         clock: &Clock,
         target: ModTarget,
         lfo_props: &[LfoProps],
         env_props: &[EnvProps],
-    ) -> ModValue {
+    ) -> Option<ModValue> {
         self.lfos
             .tick(clock, target, lfo_props)
             .map(|lfo_mod| ModValue::Lfo(lfo_mod))
@@ -103,6 +102,5 @@ impl<const LFOS: usize, const ENVS: usize, const OSCS: usize> ModPack<LFOS, ENVS
                     .tick(clock, target, env_props)
                     .map(|env_mod| ModValue::Env(env_mod))
             })
-            .unwrap_or_default()
     }
 }

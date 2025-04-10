@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let root = SVGBackend::new(OUTPUT_FILE, (1920, 1080)).into_drawing_area();
 
-    const NOTE: Note = Note::A4;
-    const WAVE_REPEAT: usize = 10;
+    const NOTE: Note = Note::A8;
+    const WAVE_REPEAT: usize = 1;
     const WAVE_LENGTH: usize =
         (WAVE_REPEAT as f32 * SAMPLE_RATE as f32 / NOTE.freq().inner()) as usize + 1;
     println!("WaveLen: {WAVE_LENGTH}");
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     synth.note_on(&clock, NOTE, UnitInterval::MAX);
 
     chart.draw_series(LineSeries::new(
-        (0..WAVE_LENGTH).map(|x| {
+        (0..=WAVE_LENGTH).map(|x| {
             let p = (x as f32, *synth.tick(&clock).left());
             clock.tick();
             p

@@ -32,7 +32,6 @@ pub enum OscMod {
 }
 
 /// The properties of oscillator component. Global for all oscillator instances.
-#[derive(Clone, Copy)]
 pub struct OpProps<'a, O: Osc, const OSCS: usize> {
     index: usize,
     enabled: bool,
@@ -42,6 +41,21 @@ pub struct OpProps<'a, O: Osc, const OSCS: usize> {
     // TODO: Tuning
     tune_semitones: i8,
     tune_cents: i8,
+}
+
+impl<'a, O: Osc, const OSCS: usize> Copy for OpProps<'a, O, OSCS> {}
+
+impl<'a, O: Osc, const OSCS: usize> Clone for OpProps<'a, O, OSCS> {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index.clone(),
+            enabled: self.enabled.clone(),
+            osc: self.osc.clone(),
+            output: self.output.clone(),
+            tune_semitones: self.tune_semitones.clone(),
+            tune_cents: self.tune_cents.clone(),
+        }
+    }
 }
 
 #[cfg(feature = "egui")]
@@ -101,7 +115,10 @@ impl<'a, O: Osc, const OSCS: usize> crate::param::ui::EguiComponent for OpProps<
 
 impl<'a, O: Osc, const OSCS: usize> Modulate for OpProps<'a, O, OSCS> {
     #[inline]
-    fn modulated(&self, f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> ModValue) -> Self {
+    fn modulated(
+        &self,
+        f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<ModValue>,
+    ) -> Self {
         Self {
             osc: self.osc.modulated(f),
             ..*self
@@ -127,15 +144,17 @@ impl<'a, O: Osc, const OSCS: usize> OpProps<'a, O, OSCS> {
     }
 }
 
-pub struct OscParams<'a, O: Osc, const OSCS: usize> {
+pub struct OpParams<'a, O: Osc, const OSCS: usize> {
     pub props: OpProps<'a, O, OSCS>,
-    pub pitch_mod: ModValue,
+    pub pitch_mod: Option<ModValue>,
 }
 
-impl<'a, O: Osc, const OSCS: usize> OscParams<'a, O, OSCS> {
+impl<'a, O: Osc, const OSCS: usize> OpParams<'a, O, OSCS> {
     #[inline]
     fn tune_mod(&self) -> f32 {
-        self.pitch_mod.as_sui().inner()
+        self.pitch_mod
+            .map(|pitch_mod| pitch_mod.as_sui().inner())
+            .unwrap_or(0.0)
             + self.props.tune_semitones as f32 / 12.0
             + self.props.tune_cents as f32 / 1200.0
     }
@@ -151,8 +170,9 @@ pub struct OpState {
 }
 
 impl OpState {
-    #[inline]
+    // #[inline(always)]
     fn update(&mut self, clock: &Clock, freq: Freq) {
+        // TODO: float comparison?!
         if self.last_freq != freq {
             self.last_freq = freq;
             self.phase_step = freq.inner() / clock.sample_rate as f32;
@@ -200,13 +220,8 @@ impl<O: Osc + 'static, const OSCS: usize> OperatorPack<O, OSCS> {
         }
     }
 
-    #[inline]
-    pub fn tick<'a>(
-        &mut self,
-        clock: &Clock,
-        freq: Freq,
-        params: &[OscParams<'a, O, OSCS>],
-    ) -> f32 {
+    // Note: Don't inline
+    pub fn tick<'a>(&mut self, clock: &Clock, freq: Freq, params: &[OpParams<'a, O, OSCS>]) -> f32 {
         self.oscs
             .iter_mut()
             .zip(params)

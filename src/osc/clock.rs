@@ -43,7 +43,10 @@ impl Clock {
 
     #[inline(always)]
     pub fn with_tick(self, tick: Tick) -> Self {
-        Self { tick, ..self }
+        Self {
+            tick,
+            sample_rate: self.sample_rate,
+        }
     }
 
     #[inline(always)]
@@ -54,9 +57,10 @@ impl Clock {
 
         if (1.0 - phase) <= phase_step {
             *last_sync = self.tick;
+            phase.fract()
+        } else {
+            phase
         }
-
-        phase.fract()
     }
 
     #[inline(always)]

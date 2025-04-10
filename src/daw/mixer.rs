@@ -234,6 +234,7 @@ impl<const SIZE: usize, const FX_SLOTS: usize> Mixer<SIZE, FX_SLOTS> {
             })
     }
 
+    #[inline]
     pub fn mix_channel_buffer(&mut self, clock: &Clock, track: usize, buffer: &mut [Frame]) {
         self.tracks[track].mix_buffer(clock, buffer);
     }

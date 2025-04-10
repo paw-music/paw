@@ -20,8 +20,13 @@
     "trunc",
     "Wavetable"
   ],
-  "rust-analyzer.check.allTargets": true,
-  "rust-analyzer.cargo.allTargets": true,
+  "rust-analyzer.check.allTargets": false,
+  // "rust-analyzer.check.targets": ["thumbv7em-none-eabihf"],
+  // "rust-analyzer.cargo.allTargets": false,
   "rust-analyzer.cargo.features": ["egui"],
-  "rust-analyzer.cargo.noDefaultFeatures": true
+  "rust-analyzer.cargo.noDefaultFeatures": true,
+  "lldb.displayFormat": "auto",
+  "lldb.showDisassembly": "always",
+  "lldb.dereferencePointers": true,
+  "lldb.consoleMode": "commands"
 }

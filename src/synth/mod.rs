@@ -2,7 +2,7 @@ use crate::{
     daw::channel_rack::Instrument,
     midi::event::MidiEventListener,
     modulation::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
-    osc::{clock::Clock, OpProps, Osc, OscParams},
+    osc::{clock::Clock, OpParams, OpProps, Osc},
     sample::Frame,
     voice::{controller::VoicesController, Voice, VoiceParams},
 };
@@ -36,7 +36,40 @@ impl<
 {
     #[inline(always)]
     fn tick(&mut self, clock: &Clock) -> Frame {
-        self.tick(clock)
+        let global_pitch_mod = self.mods.tick(
+            clock,
+            crate::modulation::mod_pack::ModTarget::GlobalPitch,
+            &self.lfo_props,
+            &self.env_props,
+        );
+
+        // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
+        let osc_params = core::array::from_fn(|index| OpParams {
+            props: self.op_props[index].modulated(|target| {
+                self.mods
+                    .tick(clock, target, &self.lfo_props, &self.env_props)
+            }),
+            pitch_mod: global_pitch_mod,
+        });
+
+        let amp_mod = self.mods.tick(
+            clock,
+            crate::modulation::mod_pack::ModTarget::GlobalLevel,
+            &self.lfo_props,
+            &self.env_props,
+        );
+
+        let frame = self.voices.tick(
+            clock,
+            &VoiceParams {
+                env_params: &self.env_props,
+                lfo_params: &self.lfo_props,
+                amp_mod,
+            },
+            &osc_params,
+        );
+
+        frame
     }
 
     #[inline(always)]
@@ -53,7 +86,7 @@ impl<
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 self.voices.egui(ui, params);
-                self.osc_props
+                self.op_props
                     .iter_mut()
                     .for_each(|props| props.egui(ui, params));
             });
@@ -123,41 +156,6 @@ impl<
     #[inline(always)]
     pub fn props_mut(&mut self) -> &mut [OpProps<'static, O, OSCS>] {
         &mut self.op_props
-    }
-
-    pub fn tick(&mut self, clock: &Clock) -> Frame {
-        // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
-        let osc_params = core::array::from_fn(|index| OscParams {
-            props: self.op_props[index].modulated(|target| {
-                self.mods
-                    .tick(clock, target, &self.lfo_props, &self.env_props)
-            }),
-            pitch_mod: self.mods.tick(
-                clock,
-                crate::modulation::mod_pack::ModTarget::GlobalPitch,
-                &self.lfo_props,
-                &self.env_props,
-            ),
-        });
-
-        let amp_mod = self.mods.tick(
-            clock,
-            crate::modulation::mod_pack::ModTarget::GlobalLevel,
-            &self.lfo_props,
-            &self.env_props,
-        );
-
-        let frame = self.voices.tick(
-            clock,
-            VoiceParams {
-                env_params: &self.env_props,
-                lfo_params: &self.lfo_props,
-                osc_params,
-                amp_mod,
-            },
-        );
-
-        frame
     }
 }
 

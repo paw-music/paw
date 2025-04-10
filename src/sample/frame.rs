@@ -196,13 +196,13 @@ impl<T: Copy, const SIZE: usize> Frame<T, SIZE> {
     }
 
     #[inline]
-    pub fn map<U: Copy>(&self, f: impl Fn(T) -> U) -> Frame<U, SIZE> {
+    pub fn map<U: Copy>(self, f: impl Fn(T) -> U) -> Frame<U, SIZE> {
         Frame::from_fn(|index| f(self.channels[index]))
     }
 
     #[inline]
     pub fn zip<U: Copy, O: Copy>(
-        &self,
+        self,
         other: Frame<U, SIZE>,
         f: impl Fn(T, U) -> O,
     ) -> Frame<O, SIZE> {
@@ -211,7 +211,7 @@ impl<T: Copy, const SIZE: usize> Frame<T, SIZE> {
 
     #[inline]
     pub fn zip_mut<U: Copy, O: Copy>(
-        &mut self,
+        mut self,
         other: &mut Frame<U, SIZE>,
         mut f: impl FnMut(&mut T, &mut U) -> O,
     ) -> Frame<O, SIZE> {

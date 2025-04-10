@@ -2,7 +2,7 @@ use super::{Voice, VoiceParams};
 use crate::{
     macros::debug_assert_unit,
     midi::{event::MidiEventListener, note::Note},
-    osc::{clock::Clock, Osc},
+    osc::{clock::Clock, OpParams, Osc},
     param::f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
     sample::Frame,
 };
@@ -407,12 +407,18 @@ impl<
     //         })
     // }
 
-    #[inline]
-    pub fn tick<'a>(&mut self, clock: &Clock, params: VoiceParams<'a, O, OSCS>) -> Frame {
-        (0..VOICES)
-            .map(|index| {
-                self.voices[index]
-                    .tick(clock, &params)
+    // #[inline(always)]
+    pub fn tick<'a>(
+        &mut self,
+        clock: &Clock,
+        params: &VoiceParams<'a, OSCS>,
+        osc_params: &[OpParams<'static, O, OSCS>; OSCS],
+    ) -> Frame {
+        self.voices
+            .iter_mut()
+            .map(|voice| {
+                voice
+                    .tick(clock, &params, osc_params)
                     .map(|sample| sample / VOICES as f32)
             })
             .sum()

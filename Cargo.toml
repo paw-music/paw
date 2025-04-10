@@ -44,7 +44,7 @@ lto = 'fat'
 codegen-units = 1
 
 [profile.bench]
-debug = 'full'
+# debug = 'full'
 opt-level = 3
 lto = 'fat'
 codegen-units = 1

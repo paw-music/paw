@@ -99,7 +99,7 @@ impl Sample for f32 {
         0.0
     }
 
-    #[inline]
+    #[inline(always)]
     fn amp(self, amp: f32) -> Self {
         self * amp
     }
