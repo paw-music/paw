@@ -89,7 +89,7 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
 pub struct WavetableProps<'a, const DEPTH: usize, const LENGTH: usize> {
     osc_index: usize,
     wavetable: &'a Wavetable<DEPTH, LENGTH>,
-    depth: usize,
+    pub depth: usize,
     depth_lerp: Option<(f32, f32)>,
 }
 
