@@ -4,12 +4,14 @@ use crate::{
     osc::clock::{Clock, Freq, Tick},
     param::f32::{SignedUnitInterval, UnitInterval},
 };
-use core::f32::EPSILON;
-use micromath::F32Ext as _;
+use core::{f32::EPSILON, fmt::Display};
+use micromath::F32Ext;
+// use micromath::F32Ext as _;
+use num_traits::{float::FloatCore, real::Real};
 
 // TODO: LUT?
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum LfoWaveform {
     // TODO: Preserve previously select pulse width
     /// Pulse waveform with specific pulse width
@@ -19,6 +21,31 @@ pub enum LfoWaveform {
     Triangle,
     Saw,
     ReverseSaw,
+}
+
+impl Display for LfoWaveform {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            LfoWaveform::Pulse(unit_interval) => write!(f, "Pulse[{unit_interval}]"),
+            LfoWaveform::Sine => "Sine".fmt(f),
+            LfoWaveform::Triangle => "Triangle".fmt(f),
+            LfoWaveform::Saw => "Saw".fmt(f),
+            LfoWaveform::ReverseSaw => "ReverseSaw".fmt(f),
+        }
+    }
+}
+
+impl LfoWaveform {
+    pub fn each(duty: UnitInterval) -> impl Iterator<Item = Self> {
+        [
+            LfoWaveform::Pulse(duty),
+            LfoWaveform::Sine,
+            LfoWaveform::Triangle,
+            LfoWaveform::Saw,
+            LfoWaveform::ReverseSaw,
+        ]
+        .into_iter()
+    }
 }
 
 // TODO: Sync
@@ -129,7 +156,7 @@ impl LfoProps {
 // TODO: Set freq by rate (1/4, 1/2, etc.). Need synth BPM for that
 #[derive(Clone)]
 pub struct Lfo {
-    state: bool,
+    active: bool,
     // phase: f32,
     last_cycle: Tick,
     // TODO: Start phase?
@@ -143,7 +170,7 @@ impl MidiEventListener for Lfo {
         let _ = note;
         // self.phase = 0.0;
         self.last_cycle = 0;
-        self.state = true;
+        self.active = true;
     }
 
     #[inline]
@@ -152,7 +179,7 @@ impl MidiEventListener for Lfo {
         let _ = velocity;
         let _ = note;
         // self.phase = 0.0;
-        self.state = false;
+        self.active = false;
     }
 }
 
@@ -161,11 +188,18 @@ impl Lfo {
         Self {
             // phase: 0.0,
             last_cycle: 0,
-            state: false,
+            active: false,
         }
     }
 
-    // TODO: Use LUT
+    // fn update(&mut self, clock: &Clock, freq: Freq) {
+    //     if self.last_freq != freq {
+    //         self.phase_step = freq.inner() / clock.sample_rate as f32;
+    //         self.last_freq = freq;
+    //     }
+    // }
+
+    // TODO: Use LUT?
     #[inline]
     pub fn at(phase: f32, params: &LfoProps) -> f32 {
         match params.waveform {
@@ -176,8 +210,9 @@ impl Lfo {
                     -1.0
                 }
             }
-            LfoWaveform::Sine => (phase * core::f32::consts::TAU).sin(),
-            LfoWaveform::Triangle => 1.0 - 2.0 * (2.0 * phase - 1.0).abs(),
+            LfoWaveform::Sine => F32Ext::sin(phase * core::f32::consts::TAU),
+            LfoWaveform::Triangle => 4.0 * (phase + 0.25 - (phase + 0.75).floor()).abs() - 1.0,
+            // LfoWaveform::Triangle => 1.0 - 2.0 * (2.0 * (phase + 0.25) - 1.0).abs(),
             LfoWaveform::Saw => (phase * 2.0) - 1.0,
             LfoWaveform::ReverseSaw => 1.0 - (phase * 2.0),
         }
@@ -191,7 +226,7 @@ impl Lfo {
         let phase = clock.phase(params.freq, &mut self.last_cycle);
 
         // Continue one cycle of LFO even if it is not triggered to avoid clicking. So here we stop non-triggered LFO only when phase is zero, i.e. the cycle is complete
-        if !self.state && phase <= EPSILON {
+        if !self.active && phase <= EPSILON {
             return None;
         }
 
@@ -252,5 +287,39 @@ impl<const SIZE: usize> LfoPack<SIZE> {
                 }
             })
             .next()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        modx::lfo::{Lfo, LfoProps, LfoWaveform},
+        osc::clock::{Clock, Freq},
+        param::f32::UnitInterval,
+    };
+
+    #[test]
+    fn cycle_precision() {
+        const SAMPLE_RATE: u32 = 44_000;
+
+        let mut lfo = Lfo::new();
+
+        let clock = Clock::zero(SAMPLE_RATE);
+        let freq = Freq::Hz(10);
+
+        for waveform in LfoWaveform::each(UnitInterval::EQUILIBRIUM) {
+            let props = LfoProps {
+                index: 0,
+                enabled: true,
+                amount: UnitInterval::MAX,
+                freq,
+                waveform,
+                target: crate::modx::mod_pack::ModTarget::GlobalLevel,
+            };
+            assert_eq!(
+                lfo.tick(&clock.with_tick(0), &props),
+                lfo.tick(&clock.with_tick(4_400), &props)
+            );
+        }
     }
 }

@@ -52,6 +52,13 @@ impl<T: Copy> Frame<T, 2> {
         Self::stereo(right, left)
     }
 
+    pub fn mono_sum(self) -> T
+    where
+        T: Add<T, Output = T>,
+    {
+        self.channels[0] + self.channels[1]
+    }
+
     #[inline]
     pub fn left(&self) -> &T {
         &self.channels[0]

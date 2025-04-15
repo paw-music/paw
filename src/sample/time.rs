@@ -1,8 +1,17 @@
 use crate::osc::clock::Clock;
-use core::ops::{Add, Mul};
+use core::{
+    fmt::Display,
+    ops::{Add, Mul},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SampleCount(u32);
+
+impl Display for SampleCount {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}S", self.0)
+    }
+}
 
 impl PartialOrd<u32> for SampleCount {
     #[inline]
@@ -63,7 +72,7 @@ impl SampleCount {
 
     /// Create SampleCount from seconds
     #[inline]
-    pub const fn from_seconds(seconds: u32, sample_rate: u32) -> Self {
+    pub const fn from_secs(seconds: u32, sample_rate: u32) -> Self {
         Self::new(Self::second(sample_rate).0 * seconds)
     }
 

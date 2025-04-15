@@ -5,7 +5,8 @@ use crate::{
 };
 use core::f32::consts::TAU;
 use lazy_static::lazy_static;
-use micromath::F32Ext as _;
+use num_traits::real::Real;
+// use micromath::F32Ext as _;
 
 const WAVETABLE_DEPTH: usize = 4;
 const WAVETABLE_LENGTH: usize = 1024;
@@ -43,7 +44,7 @@ pub fn create_basic_wavetable_synth<
                 // Square
                 WavetableRow::new(|phase| if phase < 0.5 { 1.0 } else { -1.0 }),
                 // Triangle
-                WavetableRow::new(|phase| 2.0 * (2.0 * (phase - (phase + 0.5).floor())).abs() - 1.0),
+                WavetableRow::new(|phase| 4.0 * ((phase + 0.25 - (phase + 0.75).floor())).abs() - 1.0),
                 // Saw
                 WavetableRow::new(|phase| 2.0 * (phase - (phase + 0.5).floor())),
             ]);
@@ -56,7 +57,10 @@ pub fn create_basic_wavetable_synth<
 
 #[cfg(test)]
 mod tests {
-    use crate::{midi::event::MidiEventListener, osc::clock::Clock, param::f32::UnitInterval};
+    use crate::{
+        daw::channel_rack::Instrument, midi::event::MidiEventListener, osc::clock::Clock,
+        param::f32::UnitInterval,
+    };
 
     use super::create_basic_wavetable_synth;
 

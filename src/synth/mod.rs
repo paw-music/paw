@@ -1,7 +1,7 @@
 use crate::{
     daw::channel_rack::Instrument,
     midi::event::MidiEventListener,
-    modulation::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
+    modx::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
     osc::{clock::Clock, OpParams, OpProps, Osc},
     sample::Frame,
     voice::{controller::VoicesController, Voice, VoiceParams},
@@ -38,13 +38,13 @@ impl<
     fn tick(&mut self, clock: &Clock) -> Frame {
         let global_pitch_mod = self.mods.tick(
             clock,
-            crate::modulation::mod_pack::ModTarget::GlobalPitch,
+            crate::modx::mod_pack::ModTarget::GlobalPitch,
             &self.lfo_props,
             &self.env_props,
         );
 
         // Note: Need array allocation because we cannot pass slice (params are modulated) and don't want a vector
-        let osc_params = core::array::from_fn(|index| OpParams {
+        let op_params = core::array::from_fn(|index| OpParams {
             props: self.op_props[index].modulated(|target| {
                 self.mods
                     .tick(clock, target, &self.lfo_props, &self.env_props)
@@ -54,7 +54,7 @@ impl<
 
         let amp_mod = self.mods.tick(
             clock,
-            crate::modulation::mod_pack::ModTarget::GlobalLevel,
+            crate::modx::mod_pack::ModTarget::GlobalLevel,
             &self.lfo_props,
             &self.env_props,
         );
@@ -66,7 +66,7 @@ impl<
                 lfo_params: &self.lfo_props,
                 amp_mod,
             },
-            &osc_params,
+            &op_params,
         );
 
         frame
@@ -157,13 +157,23 @@ impl<
     pub fn props_mut(&mut self) -> &mut [OpProps<'static, O, OSCS>] {
         &mut self.op_props
     }
+
+    #[inline(always)]
+    pub fn lfo_mut(&mut self) -> &mut [LfoProps] {
+        &mut self.lfo_props
+    }
+
+    #[inline(always)]
+    pub fn env_mut(&mut self) -> &mut [EnvProps] {
+        &mut self.env_props
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        midi::event::MidiEventListener, osc::clock::Clock, param::f32::UnitInterval,
-        wavetable::synth::create_basic_wavetable_synth,
+        daw::channel_rack::Instrument, midi::event::MidiEventListener, osc::clock::Clock,
+        param::f32::UnitInterval, wavetable::synth::create_basic_wavetable_synth,
     };
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::{
     midi::event::MidiEventListener,
-    modulation::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack, ModValue},
+    modx::{env::EnvProps, fm, lfo::LfoProps, mod_pack::ModPack, ModValue},
     osc::{
         clock::{Clock, Freq},
         OpParams, OperatorPack, Osc,

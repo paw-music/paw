@@ -1,7 +1,8 @@
 use crate::{
     midi::event::MidiEventListener,
-    modulation::{am, fm, rm, ModValue, Modulate},
+    modx::{am, fm, rm, ModValue, Modulate},
     param::f32::UnitInterval,
+    sample::Frame,
 };
 use clock::{Clock, Freq, Tick};
 
@@ -117,7 +118,7 @@ impl<'a, O: Osc, const OSCS: usize> Modulate for OpProps<'a, O, OSCS> {
     #[inline]
     fn modulated(
         &self,
-        f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<ModValue>,
+        f: impl FnMut(crate::modx::mod_pack::ModTarget) -> Option<ModValue>,
     ) -> Self {
         Self {
             osc: self.osc.modulated(f),
@@ -144,6 +145,7 @@ impl<'a, O: Osc, const OSCS: usize> OpProps<'a, O, OSCS> {
     }
 }
 
+#[derive(Clone)]
 pub struct OpParams<'a, O: Osc, const OSCS: usize> {
     pub props: OpProps<'a, O, OSCS>,
     pub pitch_mod: Option<ModValue>,

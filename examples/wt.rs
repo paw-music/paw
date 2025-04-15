@@ -1,5 +1,5 @@
 use paw::{
-    daw::Daw, midi::note::Note, param::f32::UnitInterval,
+    daw::Daw, midi::note::Note, param::f32::UnitInterval, sample::Frame,
     wavetable::synth::create_basic_wavetable_synth,
 };
 
@@ -24,12 +24,11 @@ fn main() {
         >(SAMPLE_RATE)))
         .unwrap();
 
+    let mut buffer = [Frame::zero(); SAMPLE_RATE as usize];
     for note in Note::each() {
         daw.note_on(note, UnitInterval::MAX);
 
-        for _ in 0..SAMPLE_RATE {
-            daw.tick_internal();
-        }
+        daw.process_buffer(&mut buffer);
 
         daw.note_off(note, UnitInterval::MAX);
     }

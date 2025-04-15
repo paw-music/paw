@@ -1,5 +1,6 @@
 use core::{fmt::Display, ops::Mul};
-use micromath::F32Ext as _;
+use num_traits::float::FloatCore;
+// use micromath::F32Ext as _;
 
 // Note: u32 is enough for one day clocking at 48kHz
 pub type Tick = u32;
@@ -24,10 +25,16 @@ impl Clock {
         self.tick += 1;
     }
 
-    /// Ticking method for processing a buffer. Does not increment clock counter but gives valid tick based on current clock state.
+    // #[inline(always)]
+    // pub fn sub_tick(self, offset: Tick) -> Self {
+    //     self.with_tick(self.tick + offset)
+    // }
+
+    /// Ticking method for processing a buffer. Does not increment clock counter but gives valid tick iterator starting from current clock state.
     #[inline(always)]
-    pub fn sub_tick(self, offset: Tick) -> Self {
-        self.with_tick(self.tick + offset)
+    pub fn for_buffer(self, buffer_len: usize) -> impl Iterator<Item = Self> {
+        let buffer_len = buffer_len as Tick;
+        (0..buffer_len).map(move |offset| self.with_tick(self.tick + offset))
     }
 
     /// Advances counter by buffer size. Must only be called when the whole buffer is processed by the system (in DAW).
@@ -51,7 +58,7 @@ impl Clock {
 
     #[inline(always)]
     pub fn phase_fast(&self, phase_step: f32, last_sync: &mut Tick) -> f32 {
-        let delta = self.tick - *last_sync;
+        let delta = self.tick.saturating_sub(*last_sync);
 
         let phase = delta as f32 * phase_step;
 
@@ -65,7 +72,7 @@ impl Clock {
 
     #[inline(always)]
     pub fn phase(&self, freq: Freq, last_sync: &mut Tick) -> f32 {
-        let delta = self.tick - *last_sync;
+        let delta = self.tick.saturating_sub(*last_sync);
 
         let phase = delta as f32 * freq.inner() / self.sample_rate as f32;
 

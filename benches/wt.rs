@@ -11,7 +11,7 @@ use paw::{
     },
 };
 use pprof::criterion::PProfProfiler;
-use std::{f32::consts::TAU, time::Duration};
+use std::f32::consts::TAU;
 
 const SAMPLE_RATE: u32 = 48_000;
 
@@ -80,8 +80,7 @@ fn bench(c: &mut Criterion) {
 
     {
         let mut group = c.benchmark_group("1s WT synth playback");
-        let group = group
-            .sample_size(2_000);
+        let group = group.sample_size(10_000);
 
         wavetable_synth_1s_bench!(
             group: [
@@ -206,8 +205,8 @@ fn bench(c: &mut Criterion) {
 
 criterion_group! {
     name = wt;
-    config = Criterion::default().sample_size(500);
-    // .with_profiler(PProfProfiler::new(50_000, pprof::criterion::Output::Flamegraph(None)));
+    config = Criterion::default()
+    .with_profiler(PProfProfiler::new(50_000, pprof::criterion::Output::Flamegraph(None)));
     targets = bench
 }
 criterion_main!(wt);

@@ -1,6 +1,8 @@
 use paw::{
+    daw::{channel_rack::Instrument, Daw},
     midi::{event::MidiEventListener, note::Note},
-    osc::clock::Clock,
+    modx::{lfo::LfoWaveform, mod_pack::ModTarget},
+    osc::clock::{Clock, Freq},
     param::f32::UnitInterval,
     wavetable::synth::create_basic_wavetable_synth,
 };
@@ -16,17 +18,26 @@ use std::{
 };
 
 const OUTPUT_FILE: &str = "./examples/notebook.svg";
-const SAMPLE_RATE: u32 = 48_000;
+const SAMPLE_RATE: u32 = 24_000;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut synth = create_basic_wavetable_synth::<1, 0, 0, 1>(SAMPLE_RATE);
+    let mut synth = create_basic_wavetable_synth::<1, 1, 0, 1>(SAMPLE_RATE);
 
-    let root = SVGBackend::new(OUTPUT_FILE, (1920, 1080)).into_drawing_area();
+    synth.props_mut()[0].kind_mut().depth = 0;
 
-    const NOTE: Note = Note::A8;
-    const WAVE_REPEAT: usize = 1;
+    let lfo0 = &mut synth.lfo_mut()[0];
+    lfo0.enabled = true;
+    lfo0.amount = UnitInterval::MAX;
+    lfo0.freq = Freq::Hz(5);
+    lfo0.target = ModTarget::GlobalPitch;
+    lfo0.waveform = LfoWaveform::Sine;
+
+    let root = SVGBackend::new(OUTPUT_FILE, (1080, 720)).into_drawing_area();
+
+    const NOTE: Note = Note::A4;
+    const WAVE_REPEAT: usize = 10;
     const WAVE_LENGTH: usize =
-        (WAVE_REPEAT as f32 * SAMPLE_RATE as f32 / NOTE.freq().inner()) as usize + 1;
+        (WAVE_REPEAT as f32 * SAMPLE_RATE as f32 / NOTE.freq().inner()) as usize;
     println!("WaveLen: {WAVE_LENGTH}");
 
     let mut chart = ChartBuilder::on(&root)
@@ -49,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     chart.draw_series(LineSeries::new(
         (0..=WAVE_LENGTH).map(|x| {
-            let p = (x as f32, *synth.tick(&clock).left());
+            let p = (x as f32, synth.tick(&clock).mono_sum());
             clock.tick();
             p
         }),

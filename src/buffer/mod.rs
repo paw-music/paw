@@ -1,4 +1,3 @@
-
 pub trait RingIndex {
     type Output;
 
@@ -8,6 +7,7 @@ pub trait RingIndex {
 impl<T, const SIZE: usize> RingIndex for [T; SIZE] {
     type Output = T;
 
+    #[inline]
     fn ring_index(&self, index: usize) -> &Self::Output {
         &self[index % SIZE]
     }
@@ -16,6 +16,7 @@ impl<T, const SIZE: usize> RingIndex for [T; SIZE] {
 impl<T> RingIndex for &[T] {
     type Output = T;
 
+    #[inline]
     fn ring_index(&self, index: usize) -> &Self::Output {
         &self[index % self.len()]
     }

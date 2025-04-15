@@ -1,5 +1,6 @@
 use crate::{param::f32::UnitInterval, sample::Frame};
-use micromath::F32Ext as _;
+// use micromath::F32Ext as _;
+use num_traits::{float::FloatCore, Float};
 
 pub enum DistKind {
     HardClip,

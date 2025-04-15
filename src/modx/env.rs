@@ -42,7 +42,7 @@ impl crate::param::ui::EguiComponent for EnvProps {
 
             let time_clamp = (
                 SampleCount::from_millis(1, clock.sample_rate),
-                SampleCount::from_seconds(10, clock.sample_rate),
+                SampleCount::from_secs(10, clock.sample_rate),
             );
 
             ui.add(self.delay.widget(clock, Some(time_clamp)).text("Delay"));
@@ -110,7 +110,8 @@ impl EnvProps {
         }
     }
 
-    fn before_sustain(&self, pos: u32, velocity: f32) -> Option<f32> {
+    #[inline(always)]
+    pub fn before_sustain(&self, pos: u32, velocity: f32) -> Option<f32> {
         let stage_end = self.delay.inner();
 
         if pos <= stage_end {

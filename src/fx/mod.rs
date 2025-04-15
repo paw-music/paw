@@ -15,9 +15,10 @@ pub trait Fx: MidiEventListener + Send {
 
     #[inline]
     fn process_buffer(&mut self, clock: &Clock, buffer: &mut [Frame]) {
-        buffer.iter_mut().enumerate().for_each(|(offset, frame)| {
-            *frame = self.tick(&clock.sub_tick(offset as Tick), *frame)
-        });
+        clock
+            .for_buffer(buffer.len())
+            .zip(buffer.iter_mut())
+            .for_each(|(clock, frame)| *frame = self.tick(&clock, *frame));
     }
 
     #[cfg(feature = "egui")]

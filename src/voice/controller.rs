@@ -6,7 +6,8 @@ use crate::{
     param::f32::{HalfUnitInterval, SignedUnitInterval, UnitInterval},
     sample::Frame,
 };
-use micromath::F32Ext as _;
+// use micromath::F32Ext as _;
+use num_traits::{float::FloatCore, Float};
 
 // TODO: We can do const expressions for voice count! [Optimization]
 /// Compute general even "spread" of voices, used for detune and stereo spread
@@ -407,18 +408,18 @@ impl<
     //         })
     // }
 
-    // #[inline(always)]
+    #[inline(always)]
     pub fn tick<'a>(
         &mut self,
         clock: &Clock,
         params: &VoiceParams<'a, OSCS>,
-        osc_params: &[OpParams<'static, O, OSCS>; OSCS],
+        op_params: &[OpParams<'static, O, OSCS>; OSCS],
     ) -> Frame {
         self.voices
             .iter_mut()
             .map(|voice| {
                 voice
-                    .tick(clock, &params, osc_params)
+                    .tick(clock, &params, op_params)
                     .map(|sample| sample / VOICES as f32)
             })
             .sum()

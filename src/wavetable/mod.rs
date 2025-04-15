@@ -1,9 +1,7 @@
-use crate::{
-    modulation::{ModValue, Modulate},
-    param::f32::SignedUnitInterval,
-};
+use crate::modx::{ModValue, Modulate};
 use micromath::F32Ext;
-use num::Zero;
+// use micromath::F32Ext;
+use num_traits::float::FloatCore;
 
 pub mod osc;
 pub mod synth;
@@ -20,28 +18,28 @@ pub struct WavetableRow<const LENGTH: usize> {
 }
 
 impl<const LENGTH: usize> WavetableRow<LENGTH> {
+    const LENGTH_F: f32 = LENGTH as f32;
+
     pub fn new(f: impl Fn(f32) -> f32) -> Self {
         Self {
             samples: core::array::from_fn(|index| {
-                let phase = index as f32 / LENGTH as f32;
+                let phase = index as f32 / Self::LENGTH_F;
                 f(phase)
             }),
         }
     }
-}
 
-impl<const LENGTH: usize> WavetableRow<LENGTH> {
-    #[inline]
+    // #[inline(always)]
     pub fn lerp(&self, phase: f32) -> f32 {
         // FIXME: phase of 1.0 * LENGTH is max size, but phase is never 1.0, will it happen?
-        let index = phase * LENGTH as f32;
+        let index = phase * Self::LENGTH_F;
         let left_index = index as usize;
         // // Note: Modulo optimization, x % LENGTH == x % (LENGTH - 1) for LENGTH being a power of two
         // let right_index = (left_index + 1) & (LENGTH - 1);
 
         let right_index = (left_index + 1) % LENGTH;
 
-        let right_index_factor = index.fract();
+        let right_index_factor = F32Ext::fract(index);
         let left_index_factor = 1.0 - right_index_factor;
 
         // if right_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
@@ -65,11 +63,11 @@ impl<const DEPTH: usize, const LENGTH: usize> Wavetable<DEPTH, LENGTH> {
         Self { rows }
     }
 
-    /// Depth MUST BE in bounds
     #[inline(always)]
     pub fn at(&self, depth: usize, phase: f32) -> f32 {
         // debug_assert!(phase >= 0.0 && phase < 1.0, "Malformed phase {phase}");
-        unsafe { self.rows.get_unchecked(depth).lerp(phase) }
+        // unsafe { self.rows.get_unchecked(depth).lerp(phase) }
+        self.rows[depth % DEPTH].lerp(phase)
     }
 }
 
@@ -97,15 +95,15 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a
     #[inline]
     fn modulated(
         &self,
-        mut f: impl FnMut(crate::modulation::mod_pack::ModTarget) -> Option<ModValue>,
+        mut f: impl FnMut(crate::modx::mod_pack::ModTarget) -> Option<ModValue>,
     ) -> Self {
-        if let Some(depth_mod) = f(crate::modulation::mod_pack::ModTarget::OscWtPos(
+        if let Some(depth_mod) = f(crate::modx::mod_pack::ModTarget::OscWtPos(
             self.osc_index,
         )) {
             let depth_offset = depth_mod.as_sui();
 
-            let depth = (DEPTH as f32 + self.depth as f32 + DEPTH as f32 * depth_offset.inner())
-                % DEPTH as f32;
+            let depth = (Self::DEPTH_F + self.depth as f32 + Self::DEPTH_F * depth_offset.inner())
+                % Self::DEPTH_F;
             let left_depth = depth as usize;
 
             let right_depth_factor = depth.fract();
@@ -142,6 +140,8 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> crate::param::ui::EguiComponen
 }
 
 impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENGTH> {
+    const DEPTH_F: f32 = DEPTH as f32;
+
     pub fn new(osc_index: usize, wavetable: &'a Wavetable<DEPTH, LENGTH>) -> Self {
         Self {
             osc_index,
@@ -151,11 +151,11 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> WavetableProps<'a, DEPTH, LENG
         }
     }
 
-    #[inline]
+    // #[inline(always)]
     pub fn lerp(&self, phase: f32) -> f32 {
         if let Some((left_depth_factor, right_depth_factor)) = self.depth_lerp {
             self.wavetable.at(self.depth, phase) * left_depth_factor
-                + self.wavetable.at((self.depth + 1) % DEPTH, phase) * right_depth_factor
+                + self.wavetable.at(self.depth + 1, phase) * right_depth_factor
         } else {
             self.wavetable.at(self.depth, phase)
         }
