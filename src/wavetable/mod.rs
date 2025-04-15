@@ -1,7 +1,6 @@
 use crate::modx::{ModValue, Modulate};
 use micromath::F32Ext;
 // use micromath::F32Ext;
-use num_traits::float::FloatCore;
 
 pub mod osc;
 pub mod synth;

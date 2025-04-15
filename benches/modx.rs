@@ -13,8 +13,6 @@ use paw::{
 const SAMPLE_RATE: u32 = 48_000;
 
 fn bench(c: &mut Criterion) {
-    assert!(SAMPLE_RATE % 2 == 0 && SAMPLE_RATE % 3 == 0);
-
     {
         let mut group = c.benchmark_group("Lfo 1s ticking");
 

@@ -41,4 +41,5 @@ macro_rules! debug_assert_unit {
     };
 }
 
+#[allow(unused)]
 pub(crate) use debug_assert_unit;

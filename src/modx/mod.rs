@@ -6,7 +6,6 @@ use core::f32;
 use micromath::F32Ext;
 // use micromath::F32Ext as _;
 use mod_pack::ModTarget;
-use num_traits::{float::FloatCore, Float};
 
 pub mod env;
 pub mod lfo;

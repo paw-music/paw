@@ -1,5 +1,5 @@
 use paw::{
-    daw::{channel_rack::Instrument, Daw},
+    daw::channel_rack::Instrument,
     midi::{event::MidiEventListener, note::Note},
     modx::{lfo::LfoWaveform, mod_pack::ModTarget},
     osc::clock::{Clock, Freq},

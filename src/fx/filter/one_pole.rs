@@ -1,5 +1,5 @@
 // use micromath::F32Ext as _;
-use num_traits::{float::FloatCore, real::Real};
+use num_traits::real::Real;
 
 #[derive(Clone, Copy)]
 pub struct OnePole {

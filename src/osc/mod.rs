@@ -2,7 +2,6 @@ use crate::{
     midi::event::MidiEventListener,
     modx::{am, fm, rm, ModValue, Modulate},
     param::f32::UnitInterval,
-    sample::Frame,
 };
 use clock::{Clock, Freq, Tick};
 

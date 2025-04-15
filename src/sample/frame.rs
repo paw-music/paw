@@ -2,7 +2,7 @@ use super::Sample;
 use crate::param::f32::UnitInterval;
 use core::{
     iter::Sum,
-    ops::{Add, AddAssign, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Sub},
 };
 
 #[derive(Clone, Copy, Debug)]

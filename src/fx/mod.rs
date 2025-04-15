@@ -1,6 +1,6 @@
 use crate::{
     midi::event::MidiEventListener,
-    osc::clock::{Clock, Tick},
+    osc::clock::Clock,
     sample::Frame,
 };
 

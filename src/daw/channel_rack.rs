@@ -1,7 +1,7 @@
 use super::mixer::{TrackOutput, UnmixedOutput};
 use crate::{
     midi::event::MidiEventListener,
-    osc::clock::{Clock, Tick},
+    osc::clock::Clock,
     sample::Frame,
 };
 use alloc::boxed::Box;
