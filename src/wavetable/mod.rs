@@ -97,16 +97,14 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a
         &self,
         mut f: impl FnMut(crate::modx::mod_pack::ModTarget) -> Option<ModValue>,
     ) -> Self {
-        if let Some(depth_mod) = f(crate::modx::mod_pack::ModTarget::OscWtPos(
-            self.osc_index,
-        )) {
+        if let Some(depth_mod) = f(crate::modx::mod_pack::ModTarget::OscWtPos(self.osc_index)) {
             let depth_offset = depth_mod.as_sui();
 
             let depth = (Self::DEPTH_F + self.depth as f32 + Self::DEPTH_F * depth_offset.inner())
                 % Self::DEPTH_F;
             let left_depth = depth as usize;
 
-            let right_depth_factor = depth.fract();
+            let right_depth_factor = F32Ext::fract(depth);
             let left_depth_factor = 1.0 - right_depth_factor;
 
             Self {
