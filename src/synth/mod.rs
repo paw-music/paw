@@ -1,10 +1,10 @@
 use crate::{
     daw::channel_rack::Instrument,
     midi::event::MidiEventListener,
-    modx::{env::EnvProps, lfo::LfoProps, mod_pack::ModPack, Modulate as _},
-    osc::{clock::Clock, OpParams, OpProps, Osc},
+    modx::{Modulate as _, env::EnvProps, lfo::LfoProps, mod_pack::ModPack},
+    osc::{OpParams, OpProps, Osc, clock::Clock},
     sample::Frame,
-    voice::{controller::VoicesController, Voice, VoiceParams},
+    voice::{Voice, VoiceParams, controller::VoicesController},
 };
 
 #[derive(Clone)]
@@ -26,13 +26,8 @@ pub struct Synth<
     voices: VoicesController<O, VOICES, LFOS, ENVS, OSCS>,
 }
 
-impl<
-        O: Osc + 'static,
-        const VOICES: usize,
-        const LFOS: usize,
-        const ENVS: usize,
-        const OSCS: usize,
-    > Instrument for Synth<O, VOICES, LFOS, ENVS, OSCS>
+impl<O: Osc + 'static, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OSCS: usize>
+    Instrument for Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
     #[inline(always)]
     fn tick(&mut self, clock: &Clock) -> Frame {
@@ -104,13 +99,8 @@ impl<
     }
 }
 
-impl<
-        O: Osc + 'static,
-        const VOICES: usize,
-        const LFOS: usize,
-        const ENVS: usize,
-        const OSCS: usize,
-    > MidiEventListener for Synth<O, VOICES, LFOS, ENVS, OSCS>
+impl<O: Osc + 'static, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OSCS: usize>
+    MidiEventListener for Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
     #[inline]
     fn note_on(
@@ -135,13 +125,8 @@ impl<
     }
 }
 
-impl<
-        O: Osc + 'static,
-        const VOICES: usize,
-        const LFOS: usize,
-        const ENVS: usize,
-        const OSCS: usize,
-    > Synth<O, VOICES, LFOS, ENVS, OSCS>
+impl<O: Osc + 'static, const VOICES: usize, const LFOS: usize, const ENVS: usize, const OSCS: usize>
+    Synth<O, VOICES, LFOS, ENVS, OSCS>
 {
     pub fn new(sample_rate: u32, osc_props: impl Fn(usize) -> O::Props<'static>) -> Self {
         Self {

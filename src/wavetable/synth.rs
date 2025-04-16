@@ -6,8 +6,8 @@ use crate::{
 use core::f32::consts::TAU;
 use lazy_static::lazy_static;
 use micromath::F32Ext;
-use num_traits::real::Real;
-// use micromath::F32Ext as _;
+// use num_traits::real::Real;
+use micromath::F32Ext as _;
 
 const WAVETABLE_DEPTH: usize = 4;
 const WAVETABLE_LENGTH: usize = 1024;
