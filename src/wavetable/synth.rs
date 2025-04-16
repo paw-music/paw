@@ -5,6 +5,7 @@ use crate::{
 };
 use core::f32::consts::TAU;
 use lazy_static::lazy_static;
+use micromath::F32Ext;
 use num_traits::real::Real;
 // use micromath::F32Ext as _;
 
@@ -40,7 +41,7 @@ pub fn create_basic_wavetable_synth<
         static ref BASIC_WAVES_TABLE: Wavetable<WAVETABLE_DEPTH, WAVETABLE_LENGTH> =
             Wavetable::from_rows([
                 // Sine
-                WavetableRow::new(|phase| (TAU * phase).sin()),
+                WavetableRow::new(|phase| F32Ext::sin(TAU * phase)),
                 // Square
                 WavetableRow::new(|phase| if phase < 0.5 { 1.0 } else { -1.0 }),
                 // Triangle

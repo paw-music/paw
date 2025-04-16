@@ -5,6 +5,7 @@ use crate::{
     param::f32::{SignedUnitInterval, UnitInterval},
 };
 use core::{f32::EPSILON, fmt::Display};
+use micromath::F32Ext;
 // use micromath::F32Ext as _;
 use num_traits::{float::FloatCore, real::Real, Float};
 
@@ -209,7 +210,7 @@ impl Lfo {
                     -1.0
                 }
             }
-            LfoWaveform::Sine => (phase * core::f32::consts::TAU).sin(),
+            LfoWaveform::Sine => F32Ext::sin(phase * core::f32::consts::TAU),
             LfoWaveform::Triangle => 4.0 * (phase + 0.25 - (phase + 0.75).floor()).abs() - 1.0,
             // LfoWaveform::Triangle => 1.0 - 2.0 * (2.0 * (phase + 0.25) - 1.0).abs(),
             LfoWaveform::Saw => (phase * 2.0) - 1.0,

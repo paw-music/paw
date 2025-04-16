@@ -1,4 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use micromath::F32Ext;
 use paw::{
     daw::{channel_rack::Instrument, Daw},
     midi::event::MidiEventListener,
@@ -65,7 +66,7 @@ macro_rules! wavetable_synth_1s_bench {
 fn bench(c: &mut Criterion) {
     const WT_LENGTH: usize = 1024;
 
-    let wt = Wavetable::<1, WT_LENGTH>::new(|_, phase| (TAU * phase).sin());
+    let wt = Wavetable::<1, WT_LENGTH>::new(|_, phase| F32Ext::sin(TAU * phase));
 
     let props = WavetableProps::new(0, &wt);
 
