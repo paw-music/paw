@@ -1,5 +1,6 @@
+use num_traits::Float;
+
 use crate::modx::{ModValue, Modulate};
-use micromath::F32Ext;
 // use micromath::F32Ext;
 
 pub mod osc;
@@ -38,7 +39,7 @@ impl<const LENGTH: usize> WavetableRow<LENGTH> {
 
         let right_index = (left_index + 1) % LENGTH;
 
-        let right_index_factor = F32Ext::fract(index);
+        let right_index_factor = index.fract();
         let left_index_factor = 1.0 - right_index_factor;
 
         // if right_index_factor > WAVETABLE_LERP_DELTA_THRESHOLD {
@@ -103,7 +104,7 @@ impl<'a, const DEPTH: usize, const LENGTH: usize> Modulate for WavetableProps<'a
                 % Self::DEPTH_F;
             let left_depth = depth as usize;
 
-            let right_depth_factor = F32Ext::fract(depth);
+            let right_depth_factor = depth.fract();
             let left_depth_factor = 1.0 - right_depth_factor;
 
             Self {

@@ -13,7 +13,7 @@ num-traits = {version = "0.2.19", default-features = false, features = ["libm"]}
 static_assertions = "1.1.0"
 panic-halt = "1.0.0"
 embedded-alloc = "0.6.0"
-micromath = {version = "2.1.0", features = ["num-traits"]}
+# micromath = {version = "2.1.0", features = ["num-traits"]}
 
 [dev-dependencies]
 criterion = {version = "0.5.1"}

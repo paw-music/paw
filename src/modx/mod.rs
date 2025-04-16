@@ -3,9 +3,10 @@ use crate::{
     param::f32::{SignedUnitInterval, UnitInterval},
 };
 use core::f32;
-use micromath::F32Ext;
 // use micromath::F32Ext as _;
 use mod_pack::ModTarget;
+#[allow(unused)]
+use num_traits::Float as _;
 
 pub mod env;
 pub mod lfo;
@@ -18,7 +19,7 @@ pub trait Modulate {
 #[inline]
 pub fn fm(freq: Freq, m: f32) -> Freq {
     if m > 0.0 {
-        freq * F32Ext::powf(2f32, m)
+        freq * 2f32.powf(m)
         // freq * 2f32.powf(m)
     } else {
         freq
@@ -27,7 +28,7 @@ pub fn fm(freq: Freq, m: f32) -> Freq {
 
 #[inline]
 pub fn am(output: f32, m: f32) -> f32 {
-    output * F32Ext::powf(m, f32::consts::E)
+    output * m.powf(f32::consts::E)
     // output * m.powf(f32::consts::E)
 }
 
