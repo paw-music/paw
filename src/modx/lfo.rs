@@ -7,7 +7,7 @@ use crate::{
 use core::{f32::EPSILON, fmt::Display};
 use micromath::F32Ext;
 // use micromath::F32Ext as _;
-use num_traits::{float::FloatCore, real::Real, Float};
+use num_traits::{float::FloatCore, real::Real};
 
 // TODO: LUT?
 
